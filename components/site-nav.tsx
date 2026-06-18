@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bookmark, Library, FolderCog } from "lucide-react"
+import { Bookmark, Library, FolderCog, MessagesSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const links = [
   { href: "/library", label: "Library", icon: Library },
+  { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/categories", label: "Categories", icon: FolderCog },
 ]
 

@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
+import { SessionProvider } from '@/components/session-provider'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
@@ -50,12 +51,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} bg-background`}
+      className={`${geistSans.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
-        {children}
-        <Toaster richColors position="top-center" />
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <SessionProvider>
+          {children}
+          <Toaster richColors position="top-center" />
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </SessionProvider>
       </body>
     </html>
   )

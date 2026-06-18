@@ -52,6 +52,65 @@ export interface CategoryWithCount extends Category {
   post_count: number
 }
 
+export type MessageRole = "user" | "assistant"
+
+export interface Conversation {
+  id: number
+  user_id: string
+  category_id: number | null
+  title: string | null
+  created_at: string
+}
+
+export interface ConversationListItem {
+  id: number
+  title: string | null
+  category_id: number | null
+  category_name: string | null
+  created_at: string
+}
+
+export interface Message {
+  id: number
+  conversation_id: number
+  role: MessageRole
+  content: string
+  referenced_post_ids: number[]
+  created_at: string
+}
+
+// A post returned to the client alongside an assistant reply
+export interface ReferencedPost {
+  id: number
+  postUrl: string
+  thumbnailUrl: string | null
+  summary: string | null
+  platform: Platform
+}
+
+// Cached web-search enrichment payload for an entity
+export interface EntityEnrichmentData {
+  priceRange: string | null
+  mustTry: string | null
+  sentiment: string | null
+  notes: string | null
+}
+
+// A candidate post pulled from the vector search, with optional enrichment
+export interface RecommendationCandidate {
+  id: number
+  post_url: string
+  thumbnail_url: string | null
+  summary: string | null
+  enriched_text: string | null
+  platform: Platform
+  entity_id: number | null
+  entity_name: string | null
+  entity_location: string | null
+  distance: number
+  enrichment?: EntityEnrichmentData | null
+}
+
 // Shape of the capture endpoint request body
 export interface CapturePayload {
   platform: Platform
@@ -68,6 +127,12 @@ export interface CapturePayload {
     permalink?: string
     scopeText?: string
     tweetTimestamp?: string
+    /**
+     * Optional list of image URLs scraped from the post DOM. When thumbnailUrl
+     * is not provided (common for Instagram), the server asks Gemini to pick the
+     * best main thumbnail from these candidates at ingest time.
+     */
+    candidateImages?: string[]
     [key: string]: unknown
   }
 }

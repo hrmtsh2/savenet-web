@@ -1,15 +1,16 @@
 import { SiteNav } from "@/components/site-nav"
 import { CategoriesManager } from "@/components/categories-manager"
-import { DEFAULT_USER_ID } from "@/lib/auth"
+import { requireUserId } from "@/lib/auth"
 import { ensureSeedCategories, getCategoriesWithCounts, getUncategorizedCount } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
 export default async function CategoriesPage() {
-  await ensureSeedCategories(DEFAULT_USER_ID)
+  const userId = await requireUserId()
+  await ensureSeedCategories(userId)
   const [categories, uncategorizedCount] = await Promise.all([
-    getCategoriesWithCounts(DEFAULT_USER_ID),
-    getUncategorizedCount(DEFAULT_USER_ID),
+    getCategoriesWithCounts(userId),
+    getUncategorizedCount(userId),
   ])
 
   return (

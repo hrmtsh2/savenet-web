@@ -1,16 +1,17 @@
 import { SiteNav } from "@/components/site-nav"
 import { LibraryView } from "@/components/library-view"
-import { DEFAULT_USER_ID } from "@/lib/auth"
+import { requireUserId } from "@/lib/auth"
 import { ensureSeedCategories, getCategoriesWithCounts, getPostsForUser, getUncategorizedCount } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
 export default async function LibraryPage() {
-  await ensureSeedCategories(DEFAULT_USER_ID)
+  const userId = await requireUserId()
+  await ensureSeedCategories(userId)
   const [categories, posts, uncategorizedCount] = await Promise.all([
-    getCategoriesWithCounts(DEFAULT_USER_ID),
-    getPostsForUser(DEFAULT_USER_ID),
-    getUncategorizedCount(DEFAULT_USER_ID),
+    getCategoriesWithCounts(userId),
+    getPostsForUser(userId),
+    getUncategorizedCount(userId),
   ])
 
   const total = posts.length

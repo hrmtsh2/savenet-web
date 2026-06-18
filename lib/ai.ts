@@ -1,9 +1,52 @@
 import { generateText, embed, Output } from "ai"
+import { google } from "@ai-sdk/google"
 import { z } from "zod"
-import type { Category } from "./types"
+import type { Category, EntityEnrichmentData, RecommendationCandidate, MessageRole } from "./types"
 
-const TEXT_MODEL = "google/gemini-2.5-flash"
-const EMBEDDING_MODEL = "google/text-embedding-005" // 768 dimensions
+// Call Gemini directly with the user's GOOGLE_GENERATIVE_AI_API_KEY (GCP Tier 1
+// prepaid credits) instead of the rate-limited shared AI Gateway.
+const TEXT_MODEL = google("gemini-2.5-flash")
+const EMBEDDING_MODEL = google.embedding("gemini-embedding-001")
+const EMBEDDING_DIMENSIONS = 768 // must match the posts.embedding vector(768) column
+
+/**
+ * Tracks how many billable model calls a single operation makes, broken down by
+ * type. Pass one meter through an operation (e.g. a capture or a re-sort run)
+ * and read the totals afterward so AI usage is transparent to the user.
+ */
+export interface CallMeter {
+  classification: number
+  ocr: number
+  embedding: number
+  placeExtraction: number
+  webSearch: number
+  synthesis: number
+  thumbnailPick: number
+}
+
+export function createCallMeter(): CallMeter {
+  return {
+    classification: 0,
+    ocr: 0,
+    embedding: 0,
+    placeExtraction: 0,
+    webSearch: 0,
+    synthesis: 0,
+    thumbnailPick: 0,
+  }
+}
+
+export function totalCalls(meter: CallMeter): number {
+  return (
+    meter.classification +
+    meter.ocr +
+    meter.embedding +
+    meter.placeExtraction +
+    meter.webSearch +
+    meter.synthesis +
+    meter.thumbnailPick
+  )
+}
 
 export interface ClassificationResult {
   categoryId: number | null
@@ -30,17 +73,22 @@ const classificationSchema = z.object({
     ),
 })
 
-// classifies posts against the categories provided by the user
-// and provides a mining summary
-export async function classifyPost(input: {
-  caption: string
-  scopeText?: string
-  categories: Pick<Category, "id" | "name" | "description">[]
-}): Promise<ClassificationResult> {
+/**
+ * Classify a post against the user's categories and produce a mining summary.
+ */
+export async function classifyPost(
+  input: {
+    caption: string
+    scopeText?: string
+    categories: Pick<Category, "id" | "name" | "description">[]
+  },
+  meter?: CallMeter,
+): Promise<ClassificationResult> {
   const categoryList = input.categories
     .map((c) => `- id ${c.id}: ${c.name}${c.description ? ` — ${c.description}` : ""}`)
     .join("\n")
 
+  if (meter) meter.classification += 1
   const { experimental_output } = await generateText({
     model: TEXT_MODEL,
     experimental_output: Output.object({ schema: classificationSchema }),
@@ -69,11 +117,12 @@ export async function classifyPost(input: {
   }
 }
 
-// run ocr/visual description of the thumbnail image and return the extracted text
-// note: tried extracting thumbnails for ig posts, but wasn't consistent across posts with multiple authors/video posts.
-// so this is only relevant for twitter image/video posts.
-export async function ocrImage(imageUrl: string): Promise<string> {
+/**
+ * Run OCR / visual description on a thumbnail image and return extracted text.
+ */
+export async function ocrImage(imageUrl: string, meter?: CallMeter): Promise<string> {
   try {
+    if (meter) meter.ocr += 1
     const { text } = await generateText({
       model: TEXT_MODEL,
       messages: [
@@ -96,49 +145,336 @@ export async function ocrImage(imageUrl: string): Promise<string> {
   }
 }
 
-// generate embedding for the enriched text
-export async function embedText(text: string): Promise<number[]> {
+/**
+ * Generate an embedding for the enriched text.
+ */
+export async function embedText(text: string, meter?: CallMeter): Promise<number[]> {
+  if (meter) meter.embedding += 1
   const { embedding } = await embed({
     model: EMBEDDING_MODEL,
     value: text,
+    providerOptions: {
+      google: { outputDimensionality: EMBEDDING_DIMENSIONS },
+    },
   })
   return embedding
 }
 
-export interface ExtractedPlace {
+export interface ExtractedEntity {
   name: string
+  /** Location/disambiguator: city for a place, league for a team, etc. May be null. */
   location: string | null
+  /** Inferred kind, e.g. place, sports_team, person, product, organization, work. */
+  entityType: string
 }
 
-const placeSchema = z.object({
-  has_place: z.boolean().describe("Whether a specific real-world place is referenced."),
-  name: z.string().nullable().describe("The name of the place, e.g. a restaurant or venue."),
-  location: z.string().nullable().describe("City, neighborhood, or address details if known."),
+const entitySchema = z.object({
+  has_entity: z.boolean().describe("Whether a specific, named primary entity is referenced."),
+  name: z
+    .string()
+    .nullable()
+    .describe("The canonical name of the single most relevant entity, e.g. 'Arsenal F.C.' or 'La Carnitaria'."),
+  entity_type: z
+    .string()
+    .nullable()
+    .describe(
+      "A short snake_case type for the entity inferred from the category context, e.g. place, sports_team, person, product, organization, work, event.",
+    ),
+  location: z
+    .string()
+    .nullable()
+    .describe(
+      "A disambiguating qualifier: city/neighborhood for a place, league/sport for a team, role/field for a person. Null if not applicable.",
+    ),
 })
 
-// extract place name + location from a summary for resolving the exact real world entity (say, a restaurant/shop)
-// TODO: since it is Gemini-only for now, look into using Google Places
-export async function extractPlace(summary: string): Promise<ExtractedPlace | null> {
+/**
+ * Extract the single most relevant entity from a summary for entity resolution.
+ * The KIND of entity to look for is inferred from the owning category, so a
+ * "Sports News" post can resolve a team or athlete while a "Food & Travel" post
+ * resolves a restaurant. Gemini-only resolution (no external lookup yet).
+ */
+export async function extractEntity(
+  input: { summary: string; categoryName: string; categoryDescription?: string | null },
+  meter?: CallMeter,
+): Promise<ExtractedEntity | null> {
+  if (meter) meter.placeExtraction += 1
   const { experimental_output } = await generateText({
     model: TEXT_MODEL,
-    experimental_output: Output.object({ schema: placeSchema }),
-    system:
-      "Extract the single most relevant real-world place (restaurant, cafe, shop, attraction, venue) referenced in the text. If no specific named place is present, set has_place to false.",
-    prompt: summary,
+    experimental_output: Output.object({ schema: entitySchema }),
+    system: [
+      "Extract the single most relevant named entity referenced in the text, for grouping related saved posts.",
+      "First infer what KINDS of entities matter for this category from its name and description, then extract one.",
+      "Examples by category: a food/travel category → a specific place (restaurant, cafe, venue); a sports category → a team, athlete, or competition; a tech/news category → a company, product, or person; a books/film category → a specific work or creator.",
+      "Choose a concise snake_case entity_type that fits what you found (e.g. place, sports_team, person, product, organization, work, event).",
+      "Set has_entity to false only when no specific named entity is present (e.g. a generic tip with no subject).",
+    ].join(" "),
+    prompt: [
+      `Category: ${input.categoryName}${input.categoryDescription ? ` — ${input.categoryDescription}` : ""}`,
+      "",
+      `Post summary:\n${input.summary}`,
+    ].join("\n"),
   })
 
-  if (!experimental_output.has_place || !experimental_output.name) return null
+  if (!experimental_output.has_entity || !experimental_output.name) return null
   return {
     name: experimental_output.name,
     location: experimental_output.location,
+    entityType: experimental_output.entity_type || "other",
   }
 }
 
-// build a deduplication key from the place name and location, and normalise it
-export function buildResolutionKey(name: string, location: string | null): string {
-  return [name, location ?? ""]
+/**
+ * Build a normalized dedup key from an entity's type + name + location, so
+ * entities of different kinds (a team vs a place) never collide on name alone.
+ */
+export function buildResolutionKey(entityType: string, name: string, location: string | null): string {
+  return [entityType, name, location ?? ""]
     .join("|")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim()
+}
+
+/* ------------------------------------------------------------------ */
+/* Thumbnail resolution                                                */
+/* ------------------------------------------------------------------ */
+
+const thumbnailSchema = z.object({
+  best_image_url: z
+    .string()
+    .nullable()
+    .describe("The single best URL representing the post's main visual, or null if none of the candidates qualify."),
+  reason: z.string().describe("Brief reason for the choice (for debugging)."),
+})
+
+/**
+ * Pick the most representative thumbnail from a list of candidate image URLs the
+ * extension scraped out of the post DOM. Instagram makes this hard (multiple
+ * authors, carousels, video posters), so we let Gemini reason over the candidates
+ * plus hints rather than relying on brittle positional DOM logic.
+ *
+ * This does NOT fetch the images — it only reasons over URLs + hints, so it's a
+ * cheap text call. Returns a chosen URL (one of the candidates) or null.
+ */
+export async function pickThumbnail(
+  input: {
+    candidates: string[]
+    caption?: string
+    authorHandles?: string[]
+    mediaType?: string | null
+  },
+  meter?: CallMeter,
+): Promise<string | null> {
+  const candidates = (input.candidates ?? []).filter((u) => typeof u === "string" && /^https?:\/\//i.test(u))
+  if (candidates.length === 0) return null
+  if (candidates.length === 1) return candidates[0]
+
+  try {
+    if (meter) meter.thumbnailPick += 1
+    const { experimental_output } = await generateText({
+      model: TEXT_MODEL,
+      experimental_output: Output.object({ schema: thumbnailSchema }),
+      system: [
+        "You are choosing the main thumbnail image for a saved social media post from a list of candidate image URLs scraped from the post's HTML.",
+        "Prefer the primary post media (the photo, or the first slide of a carousel, or a video's poster frame).",
+        "AVOID profile/avatar images of the author(s), follower/suggested-user avatars, sprites, emoji, icons, and tracking pixels.",
+        "Heuristics: profile pictures are often small/square and contain the author handle in the URL path; main media URLs are usually larger content-delivery URLs.",
+        "You MUST return one of the provided candidate URLs verbatim, or null if every candidate looks like an avatar/icon rather than post media.",
+      ].join(" "),
+      prompt: [
+        input.caption ? `Caption: ${input.caption}` : "",
+        input.mediaType ? `Media type hint: ${input.mediaType}` : "",
+        input.authorHandles?.length ? `Author handle(s) (likely appear in avatar URLs): ${input.authorHandles.join(", ")}` : "",
+        "",
+        "Candidate image URLs:",
+        ...candidates.map((u, i) => `${i + 1}. ${u}`),
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    })
+
+    const chosen = experimental_output.best_image_url
+    // Only trust a choice that is actually one of the candidates.
+    if (chosen && candidates.includes(chosen)) return chosen
+    return null
+  } catch (err) {
+    console.log("[v0] pickThumbnail failed:", (err as Error).message)
+    // Fall back to the first candidate so we at least show something.
+    return candidates[0]
+  }
+}
+
+const entityImageSchema = z.object({
+  image_url: z
+    .string()
+    .nullable()
+    .describe("A direct, publicly accessible image URL (ending in .jpg/.jpeg/.png/.webp) for the place, or null."),
+})
+
+/**
+ * Best-effort fallback: when a post has no usable thumbnail, ask Gemini (with
+ * Google Search grounding) to find a representative public image URL for the
+ * resolved entity/place. This is unreliable by nature — the model may not find
+ * a direct image file — so callers MUST treat null as "no image" and render a
+ * placeholder instead.
+ */
+export async function findEntityImage(
+  name: string,
+  location: string | null,
+  meter?: CallMeter,
+): Promise<string | null> {
+  const where = location ? `${name} (${location})` : name
+  try {
+    if (meter) meter.webSearch += 1
+    const { text } = await generateText({
+      model: TEXT_MODEL,
+      tools: { google_search: google.tools.googleSearch({}) },
+      system:
+        "You find a single representative, publicly accessible image for a real-world place using web search. " +
+        "Return ONLY a direct image URL that ends in .jpg, .jpeg, .png, or .webp on a publicly accessible host. " +
+        "Do not return a webpage URL, a search page, or anything that requires login. " +
+        "If you cannot find a direct image URL, reply with exactly: NONE",
+      prompt: `Find one representative photo for: ${where}`,
+    })
+
+    const match = text.match(/https?:\/\/\S+\.(?:jpg|jpeg|png|webp)(?:\?\S+)?/i)
+    return match ? match[0] : null
+  } catch (err) {
+    console.log("[v0] findEntityImage failed:", (err as Error).message)
+    return null
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Chat recommendation AI                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Use Gemini with Google Search grounding to look up current, real-world info
+ * about a place: price range, must-try items, and review sentiment. Returns a
+ * structured payload (fields may be null when not found). Grounding tools can't
+ * be combined with structured output, so we parse the model's plain-text reply.
+ */
+export async function enrichEntityWeb(
+  name: string,
+  location: string | null,
+  meter?: CallMeter,
+): Promise<EntityEnrichmentData> {
+  if (meter) meter.webSearch += 1
+  const where = location ? `${name} (${location})` : name
+  try {
+    const { text } = await generateText({
+      model: TEXT_MODEL,
+      tools: { google_search: google.tools.googleSearch({}) },
+      system:
+        "You research real-world places using live web search. Be concise and factual. " +
+        "Reply using EXACTLY these four labeled lines and nothing else:\n" +
+        "PRICE: <typical price range or 'unknown'>\n" +
+        "MUSTTRY: <comma-separated standout items/dishes or 'unknown'>\n" +
+        "SENTIMENT: <one short sentence on overall review sentiment>\n" +
+        "NOTES: <one short line of any other useful current detail or 'none'>",
+      prompt: `Look up current information about: ${where}`,
+    })
+
+    const pick = (label: string): string | null => {
+      const m = text.match(new RegExp(`^${label}:\\s*(.+)$`, "im"))
+      const v = m?.[1]?.trim()
+      if (!v || /^(unknown|none|n\/a)$/i.test(v)) return null
+      return v
+    }
+
+    return {
+      priceRange: pick("PRICE"),
+      mustTry: pick("MUSTTRY"),
+      sentiment: pick("SENTIMENT"),
+      notes: pick("NOTES"),
+    }
+  } catch (err) {
+    console.log("[v0] enrichEntityWeb failed:", (err as Error).message)
+    return { priceRange: null, mustTry: null, sentiment: null, notes: null }
+  }
+}
+
+export interface SynthesisResult {
+  reply: string
+  citedPostIds: number[]
+}
+
+/**
+ * Synthesize a recommendation from the candidate saved posts. The model must
+ * recommend ONLY from the provided candidates, explain the fit, and cite each
+ * recommendation's source post id. Returns the reply plus the ids actually cited.
+ */
+export async function synthesizeRecommendation(
+  input: {
+    history: { role: MessageRole; content: string }[]
+    candidates: RecommendationCandidate[]
+    userMessage: string
+    categoryName: string
+  },
+  meter?: CallMeter,
+): Promise<SynthesisResult> {
+  if (meter) meter.synthesis += 1
+
+  const candidateBlocks = input.candidates
+    .map((c) => {
+      const lines = [
+        `POST ${c.id} [${c.platform}]`,
+        c.summary ? `Summary: ${c.summary}` : c.enriched_text ? `Details: ${c.enriched_text}` : "",
+        c.entity_name ? `Place: ${c.entity_name}${c.entity_location ? `, ${c.entity_location}` : ""}` : "",
+      ]
+      if (c.enrichment) {
+        if (c.enrichment.priceRange) lines.push(`Live price: ${c.enrichment.priceRange}`)
+        if (c.enrichment.mustTry) lines.push(`Must-try: ${c.enrichment.mustTry}`)
+        if (c.enrichment.sentiment) lines.push(`Reviews: ${c.enrichment.sentiment}`)
+        if (c.enrichment.notes) lines.push(`Note: ${c.enrichment.notes}`)
+      }
+      return lines.filter(Boolean).join("\n")
+    })
+    .join("\n\n")
+
+  const historyText = input.history
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n")
+
+  const result = await generateText({
+    model: TEXT_MODEL,
+    experimental_output: Output.object({
+      schema: z.object({
+        reply: z
+          .string()
+          .describe("A helpful, conversational recommendation written in markdown. Cite posts inline like [#12]."),
+        cited_post_ids: z
+          .array(z.number())
+          .describe("The exact POST ids you recommended / referenced in the reply."),
+      }),
+    }),
+    system: [
+      `You are SaveNet's recommendation assistant for the user's "${input.categoryName}" saved posts.`,
+      "Recommend ONLY from the candidate posts provided below. Never invent options that are not among the candidates.",
+      "If none of the candidates fit the user's request, say so honestly rather than making something up.",
+      "For each recommendation, explain WHY it fits the user's stated preferences, and cite the source post inline using its id like [#<id>].",
+      "Prefer candidates with live web data when relevant (price, must-try, reviews). Keep the tone friendly and concise.",
+      "Populate cited_post_ids with exactly the post ids you referenced.",
+    ].join(" "),
+    prompt: [
+      historyText ? `Conversation so far:\n${historyText}\n` : "",
+      `Candidate saved posts:\n${candidateBlocks || "(none)"}\n`,
+      `User's latest message:\n${input.userMessage}`,
+    ].join("\n"),
+  })
+
+  const out = result.experimental_output
+  // Keep only ids that are real candidates.
+  const validIds = new Set(input.candidates.map((c) => c.id))
+  const citedPostIds = (out.cited_post_ids ?? []).filter((id) => validIds.has(id))
+  return { reply: out.reply, citedPostIds }
+}
+
+/** Short helper to title a new conversation from the user's first message. */
+export function deriveConversationTitle(message: string): string {
+  const trimmed = message.trim().replace(/\s+/g, " ")
+  if (trimmed.length <= 60) return trimmed
+  return trimmed.slice(0, 57) + "…"
 }

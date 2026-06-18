@@ -1,7 +1,17 @@
 import { query, toVectorLiteral } from "@/lib/db"
 import { authenticateRequest } from "@/lib/auth"
 import { ensureSeedCategories, getCategories } from "@/lib/queries"
-import { classifyPost, ocrImage, embedText, extractPlace, buildResolutionKey } from "@/lib/ai"
+import {
+  classifyPost,
+  ocrImage,
+  embedText,
+  extractEntity,
+  buildResolutionKey,
+  pickThumbnail,
+  findEntityImage,
+  createCallMeter,
+  totalCalls,
+} from "@/lib/ai"
 import type { CapturePayload, Category } from "@/lib/types"
 
 export const maxDuration = 60
@@ -26,12 +36,33 @@ export async function POST(req: Request) {
     return Response.json({ error: "platform must be 'instagram' or 'x'" }, { status: 400 })
   }
 
+  const meter = createCallMeter()
+
   try {
     await ensureSeedCategories(userId)
 
     const caption = body.caption ?? ""
     const scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
-    const thumbnailUrl = body.thumbnailUrl ?? ""
+
+    // Resolve a thumbnail. X usually sends a working thumbnailUrl directly.
+    // Instagram is harder, so the extension can instead send an array of
+    // candidate image URLs in raw.candidateImages and let Gemini pick the best.
+    let thumbnailUrl = body.thumbnailUrl ?? ""
+    const candidateImages = Array.isArray(body.raw?.candidateImages)
+      ? (body.raw!.candidateImages as unknown[]).filter((u): u is string => typeof u === "string")
+      : []
+    if (!thumbnailUrl && candidateImages.length > 0) {
+      const picked = await pickThumbnail(
+        {
+          candidates: candidateImages,
+          caption,
+          authorHandles: body.authorHandle ? [body.authorHandle] : undefined,
+          mediaType: body.mediaType ?? null,
+        },
+        meter,
+      )
+      if (picked) thumbnailUrl = picked
+    }
 
     // 1. Upsert the base post keyed on (user_id, post_url).
     const upsert = await query<{ id: number }>(
@@ -71,11 +102,14 @@ export async function POST(req: Request) {
 
     // 2. Classify against the user's current categories.
     const categories = await getCategories(userId)
-    const classification = await classifyPost({
-      caption,
-      scopeText,
-      categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description })),
-    })
+    const classification = await classifyPost(
+      {
+        caption,
+        scopeText,
+        categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description })),
+      },
+      meter,
+    )
 
     // 3. Resolve the assigned category, creating a new one if proposed.
     let assigned: Category | undefined
@@ -96,38 +130,67 @@ export async function POST(req: Request) {
     // 4. Build enriched_text = caption + " " + summary (+ OCR text when available).
     let enrichedText = `${caption} ${classification.summary}`.trim()
     if (thumbnailUrl) {
-      const ocrText = await ocrImage(thumbnailUrl)
+      const ocrText = await ocrImage(thumbnailUrl, meter)
       if (ocrText) enrichedText = `${enrichedText} ${ocrText}`.trim()
     }
 
     // 5. Embed enriched_text.
-    const embedding = await embedText(enrichedText)
+    const embedding = await embedText(enrichedText, meter)
 
-    // 6. Entity resolution when the assigned category opts in.
+    // 6. Entity resolution when the assigned category opts in. The KIND of
+    // entity (place, sports_team, person, etc.) is inferred from the category.
     let entityId: number | null = null
+    let resolvedEntity: { name: string; location: string | null } | null = null
     if (assigned?.enable_entity_resolution) {
-      const place = await extractPlace(classification.summary)
-      if (place) {
-        const resolutionKey = buildResolutionKey(place.name, place.location)
-        const entity = await query<{ id: number }>(
-          `INSERT INTO entities (resolution_key, name, location)
-           VALUES ($1, $2, $3)
+      const entity = await extractEntity(
+        {
+          summary: classification.summary,
+          categoryName: assigned.name,
+          categoryDescription: assigned.description,
+        },
+        meter,
+      )
+      if (entity) {
+        resolvedEntity = { name: entity.name, location: entity.location }
+        const resolutionKey = buildResolutionKey(entity.entityType, entity.name, entity.location)
+        const row = await query<{ id: number }>(
+          `INSERT INTO entities (resolution_key, name, location, entity_type)
+           VALUES ($1, $2, $3, $4)
            ON CONFLICT (resolution_key) DO UPDATE SET
              name = EXCLUDED.name,
-             location = COALESCE(EXCLUDED.location, entities.location)
+             location = COALESCE(EXCLUDED.location, entities.location),
+             entity_type = EXCLUDED.entity_type
            RETURNING id`,
-          [resolutionKey, place.name, place.location],
+          [resolutionKey, entity.name, entity.location, entity.entityType],
         )
-        entityId = entity.rows[0].id
+        entityId = row.rows[0].id
       }
+    }
+
+    // 6b. Thumbnail fallback: if we still have no image but resolved an entity,
+    // try to find a representative photo for it via grounded search.
+    // Best-effort — may return null, in which case the card shows a placeholder.
+    if (!thumbnailUrl && resolvedEntity) {
+      const entityImage = await findEntityImage(resolvedEntity.name, resolvedEntity.location, meter)
+      if (entityImage) thumbnailUrl = entityImage
     }
 
     // 7. Persist enrichment results.
     await query(
       `UPDATE posts
-       SET category_id = $1, summary = $2, enriched_text = $3, embedding = $4::vector, entity_id = $5, updated_at = now()
-       WHERE id = $6 AND user_id = $7`,
-      [assigned?.id ?? null, classification.summary, enrichedText, toVectorLiteral(embedding), entityId, postId, userId],
+       SET category_id = $1, summary = $2, enriched_text = $3, embedding = $4::vector, entity_id = $5,
+           thumbnail_url = COALESCE($6, thumbnail_url), updated_at = now()
+       WHERE id = $7 AND user_id = $8`,
+      [
+        assigned?.id ?? null,
+        classification.summary,
+        enrichedText,
+        toVectorLiteral(embedding),
+        entityId,
+        thumbnailUrl || null,
+        postId,
+        userId,
+      ],
     )
 
     return Response.json({
@@ -137,6 +200,9 @@ export async function POST(req: Request) {
       createdNewCategory: Boolean(classification.newCategory && assigned?.auto_created),
       summary: classification.summary,
       entityId,
+      thumbnailUrl: thumbnailUrl || null,
+      modelCalls: totalCalls(meter),
+      modelCallBreakdown: meter,
     })
   } catch (err) {
     console.log("[v0] capture error:", (err as Error).message)
