@@ -4,7 +4,7 @@ import { SignJWT } from "jose"
 const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 const cognitoDomain = "https://ap-south-1gevfg0ops.auth.ap-south-1.amazoncognito.com"
 const extensionClientId = process.env.COGNITO_EXTENSION_CLIENT_ID!
-const extensionRedirectUri = `https://achceaepckifblghhnbedcladddiailp.chromiumapp.org/`
+const extensionRedirectUri = `https://achceaepckifblghhnbedcladddiailp.chromiumapp.org`
 
 export async function POST(req: Request) {
   let body: { code?: string; codeVerifier?: string }
