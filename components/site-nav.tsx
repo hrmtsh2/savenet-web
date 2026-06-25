@@ -2,8 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bookmark, Library, FolderCog, MessagesSquare } from "lucide-react"
+import { useSession, signOut } from "next-auth/react"
+import { Bookmark, Library, FolderCog, MessagesSquare, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 const links = [
   { href: "/library", label: "Library", icon: Library },
@@ -13,6 +15,7 @@ const links = [
 
 export function SiteNav() {
   const pathname = usePathname()
+  const { data: session } = useSession()
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
@@ -45,6 +48,16 @@ export function SiteNav() {
             )
           })}
         </nav>
+        {session?.user && (
+          <div className = "flex items-center gap-3">
+            <span className = "hidden text-xs text-muted-foreground sm:inline truncate max-w-[160px]">
+              {session.user.email}
+            </span>
+            <Button variant = "ghost" size = "icon" onClick = {() => signOut({ callbackUrl: "/login" })} title = "log out">
+              <LogOut className = "h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   )
