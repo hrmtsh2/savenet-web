@@ -1,10 +1,7 @@
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/auth.config"
-import { jwtVerify } from "jose"
+import { query } from "@/lib/db"
 
-// Stubbed auth: a Bearer API key maps to a user id.
-// Used by /api/posts/capture and other Bearer-token endpoints (the browser
-// extension has no session to send, so it stays on this path).
 const SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 
 export async function authenticateRequest(req: Request): Promise<string | null> {
@@ -12,18 +9,20 @@ export async function authenticateRequest(req: Request): Promise<string | null> 
   const token = header.replace(/^Bearer\s+/i, "").trim()
   if (!token) return null
 
-  // First try verifying as a SaveNet JWT (issued by /api/auth/extension-token)
+  // Check extension_sessions table first (opaque token from extension OAuth flow)
   try {
-    const { payload } = await jwtVerify(token, SECRET)
-    if (typeof payload.sub === "string") return payload.sub
+    const { rows } = await query<{ user_id: string }>(
+      `SELECT user_id FROM extension_sessions 
+       WHERE token = $1 AND expires_at > now()`,
+      [token],
+    )
+    if (rows[0]?.user_id) return rows[0].user_id
   } catch {
-    // Not a valid JWT — fall through to legacy API key check
+    // Table might not exist yet in dev
   }
 
-  // Legacy static API key fallback (for existing dev/testing setup)
   const expected = process.env.SAVENET_API_KEY
   if (expected && token === expected) {
-    // Return your own Cognito sub here so legacy captures go to your account
     return "81338d0a-7061-7026-4702-2466d1b69058"
   }
 

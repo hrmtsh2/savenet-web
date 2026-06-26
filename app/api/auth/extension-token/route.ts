@@ -1,7 +1,5 @@
 import { query } from "@/lib/db"
-import { SignJWT } from "jose"
 
-const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET!)
 const cognitoDomain = "https://ap-south-1gevfg0ops.auth.ap-south-1.amazoncognito.com"
 const extensionClientId = process.env.COGNITO_EXTENSION_CLIENT_ID!
 const extensionRedirectUri = `https://achceaepckifblghhnbedcladddiailp.chromiumapp.org`
@@ -14,11 +12,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  if (!body.code) {
+  if (!body.code || !body.codeVerifier) {
     return Response.json({ error: "Missing code or codeVerifier" }, { status: 400 })
   }
 
-  // Exchange auth code for Cognito tokens
   const tokenRes = await fetch(`${cognitoDomain}/oauth2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -27,7 +24,7 @@ export async function POST(req: Request) {
       client_id: extensionClientId,
       redirect_uri: extensionRedirectUri,
       code: body.code,
-      code_verifier: body.codeVerifier
+      code_verifier: body.codeVerifier,
     }),
   })
 
@@ -38,14 +35,26 @@ export async function POST(req: Request) {
   }
 
   const tokens = await tokenRes.json()
+  console.log("[extension-token] token keys:", Object.keys(tokens))
 
-  // Decode the ID token to get the user's sub and email
-  const [, payloadB64] = (tokens.id_token as string).split(".")
-  const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString())
-  const sub: string = payload.sub
-  const email: string = payload.email ?? ""
+  const idToken = tokens.id_token as string
+  const parts = idToken.split(".")
+  const payloadJson = Buffer.from(parts[1], "base64").toString("utf8")
+  const payload = JSON.parse(payloadJson)
 
-  // Upsert user row (same as the NextAuth jwt callback does for web logins)
+  console.log("[extension-token] decoded payload keys:", Object.keys(payload))
+  console.log("[extension-token] sub:", payload.sub, "type:", typeof payload.sub)
+  console.log("[extension-token] email:", payload.email)
+
+  const sub = payload.sub as string
+  const email = (payload.email ?? "") as string
+
+  if (!sub || typeof sub !== "string") {
+    console.error("[extension-token] sub missing from ID token payload:", payload)
+    return Response.json({ error: "Could not resolve user identity" }, { status: 500 })
+  }
+
+  // Upsert user row
   await query(
     `INSERT INTO users (id, email)
      VALUES ($1, $2)
@@ -53,14 +62,16 @@ export async function POST(req: Request) {
     [sub, email],
   )
 
-  // Mint a simple signed JWT the extension will use as its Bearer token.
-  // This avoids sending Cognito's own tokens (which are large and rotate)
-  // and gives us a stable, verifiable token we control.
-  const savenetToken = await new SignJWT({ sub, email })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("30d")
-    .sign(secret)
+  // Generate a simple opaque session token — no JWT complexity
+  const sessionToken = crypto.randomUUID() + "-" + crypto.randomUUID()
 
-  return Response.json({ token: savenetToken, email })
+  await query(
+    `INSERT INTO extension_sessions (token, user_id, email)
+     VALUES ($1, $2, $3)`,
+    [sessionToken, sub, email],
+  )
+
+  console.log("[extension-token] session created for sub:", sub)
+
+  return Response.json({ token: sessionToken, email })
 }
