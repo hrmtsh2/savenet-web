@@ -17,7 +17,7 @@ import type { CapturePayload, Category } from "@/lib/types"
 export const maxDuration = 60
 
 export async function POST(req: Request) {
-  const userId = authenticateRequest(req)
+  const userId = await authenticateRequest(req)
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
