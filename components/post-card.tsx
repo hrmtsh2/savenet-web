@@ -70,18 +70,7 @@ export function PostCard({ post }: { post: PostWithRelations }) {
             onError={() => setImageFailed(true)}
           />
         </div>
-      ) : (
-        <div className="relative flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 bg-muted text-muted-foreground">
-          {post.platform === "instagram" ? (
-            <InstagramLogo className="h-8 w-8" />
-          ) : (
-            <XLogo className="h-7 w-7" />
-          )}
-          <span className="max-w-[80%] truncate px-2 text-center text-xs">
-            {post.entity_name || (caption ? caption.slice(0, 60) : "No preview available")}
-          </span>
-        </div>
-      )}
+      ) : null }
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
