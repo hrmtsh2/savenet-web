@@ -95,6 +95,8 @@ export async function classifyPost(
     system: [
       "You are an assistant that files saved social media posts into categories.",
       "Pick the single best-fitting existing category by id.",
+      "Pick the single best-fitting existing category by id. Be generous with existing categories — prefer fitting a post into an existing one even if the fit is imperfect.",
+      "Only propose a new_category if the post absolutely cannot be reasonably placed in ANY existing category. A post about a specific niche topic should still go into a broad existing category rather than spawning a new one, unless no existing category can be applicable.",
       "If none of the existing categories fit well, return null for category_id and propose a new_category with a concise name and a short description.",
       "If an existing category fits, return its id and set new_category to null.",
       "Always produce a 'summary': a useful description mining BOTH the caption and the scope text (which may include comments).",
