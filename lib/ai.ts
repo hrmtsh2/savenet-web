@@ -419,8 +419,9 @@ export async function synthesizeRecommendation(
 
   const candidateBlocks = input.candidates
     .map((c) => {
+      const label = c.entity_name || c.summary?.slice(0, 60) || `Post ${c.id}`
       const lines = [
-        `POST ${c.id} [${c.platform}]`,
+        `[POST_REF:${c.id}] ${label} [${c.platform}]`,
         c.summary ? `Summary: ${c.summary}` : c.enriched_text ? `Details: ${c.enriched_text}` : "",
         c.entity_name ? `Place: ${c.entity_name}${c.entity_location ? `, ${c.entity_location}` : ""}` : "",
       ]
@@ -444,19 +445,29 @@ export async function synthesizeRecommendation(
       schema: z.object({
         reply: z
           .string()
-          .describe("A helpful, conversational recommendation written in markdown. Cite posts inline like [#12]."),
+          .describe(
+            "A helpful, conversational recommendation written in markdown. " +
+            "Refer to places and posts by their name or description — do NOT include raw post IDs or [#number] citations in the reply text. " +
+            "The reply should read naturally, as if written by a knowledgeable friend."
+          ),
         cited_post_ids: z
           .array(z.number())
-          .describe("The exact POST ids you recommended / referenced in the reply."),
+          .describe(
+            "The POST_REF ids of ONLY the posts you explicitly recommended or directly referenced in your reply. " +
+            "Do NOT include posts you merely considered or rejected. " +
+            "Only include an id if the corresponding place/post is clearly mentioned in your reply text."
+          ),
       }),
     }),
     system: [
       `You are SaveNet's recommendation assistant for the user's "${input.categoryName}" saved posts.`,
-      "Recommend ONLY from the candidate posts provided below. Never invent options that are not among the candidates.",
+      "Recommend ONLY from the candidate posts provided below — each is tagged with [POST_REF:<id>] for your reference.",
+      "Never invent options that are not among the candidates.",
       "If none of the candidates fit the user's request, say so honestly rather than making something up.",
-      "For each recommendation, explain WHY it fits the user's stated preferences, and cite the source post inline using its id like [#<id>].",
+      "For each recommendation, explain WHY it fits the user's stated preferences.",
+      "Do NOT include raw post IDs or [#number] tags in your reply — write naturally using place/post names.",
       "Prefer candidates with live web data when relevant (price, must-try, reviews). Keep the tone friendly and concise.",
-      "Populate cited_post_ids with exactly the post ids you referenced.",
+      "In cited_post_ids, include ONLY the POST_REF ids of posts you explicitly recommended in the reply — not ones you considered and skipped.",
     ].join(" "),
     prompt: [
       historyText ? `Conversation so far:\n${historyText}\n` : "",
@@ -466,7 +477,6 @@ export async function synthesizeRecommendation(
   })
 
   const out = result.experimental_output
-  // Keep only ids that are real candidates.
   const validIds = new Set(input.candidates.map((c) => c.id))
   const citedPostIds = (out.cited_post_ids ?? []).filter((id) => validIds.has(id))
   return { reply: out.reply, citedPostIds }
