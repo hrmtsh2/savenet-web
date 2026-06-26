@@ -3,7 +3,7 @@ import { CategoriesManager } from "@/components/categories-manager"
 import { requireUserId } from "@/lib/auth"
 import { ensureSeedCategories, getCategoriesWithCounts, getUncategorizedCount } from "@/lib/queries"
 
-export const dynamic = "force-dynamic"
+// export const dynamic = "force-dynamic"
 
 export default async function CategoriesPage() {
   const userId = await requireUserId()
