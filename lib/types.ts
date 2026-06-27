@@ -6,6 +6,7 @@ export interface Category {
   name: string
   description: string | null
   enable_entity_resolution: boolean
+  enable_web_enrichment: boolean
   auto_created: boolean
   created_at: string
 }
@@ -17,6 +18,14 @@ export interface Entity {
   name: string
   location: string | null
   resolved_at: string
+}
+
+export interface FurtherReadingItem {
+  url: string
+  title: string | null
+  snippet: string | null
+  extractedData: Record<string, string | null> | null
+  // e.g. { price: "₹450", availability: "In stock", menuHighlights: "Biryani, Kebab" }
 }
 
 export interface Post {
@@ -37,6 +46,7 @@ export interface Post {
   summary: string | null
   enriched_text: string | null
   entity_id: number | null
+  further_reading: FurtherReadingItem[] | null
   created_at: string
   updated_at: string
 }
@@ -105,6 +115,7 @@ export interface RecommendationCandidate {
   enriched_text: string | null
   platform: Platform
   captured_at: string | null
+  further_reading: FurtherReadingItem[] | null
   entity_id: number | null
   entity_name: string | null
   entity_location: string | null

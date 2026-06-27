@@ -10,26 +10,30 @@ import type {
   EntityEnrichmentData,
 } from "./types"
 
-const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "description" | "enable_entity_resolution">> = [
+const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "description" | "enable_entity_resolution" | "enable_web_enrichment">> = [
   {
     name: "Food & Travel",
     description: "restaurants, cafes, travel spots, things to visit or eat",
     enable_entity_resolution: true,
+    enable_web_enrichment: true,
   },
   {
     name: "Resources",
     description: "tutorials, tools, discounts, learning material",
     enable_entity_resolution: false,
+    enable_web_enrichment: true,
   },
   {
     name: "Media",
     description: "movie/book/album/show recommendations",
     enable_entity_resolution: false,
+    enable_web_enrichment: true
   },
   {
     name: "Other",
     description: null as unknown as string,
     enable_entity_resolution: false,
+    enable_web_enrichment: true
   },
 ]
 
@@ -42,10 +46,10 @@ export async function ensureSeedCategories(userId: string): Promise<void> {
 
   for (const c of DEFAULT_CATEGORIES) {
     await query(
-      `INSERT INTO categories (user_id, name, description, enable_entity_resolution, auto_created)
-       VALUES ($1, $2, $3, $4, false)
+      `INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)
+       VALUES ($1, $2, $3, $4, $5, false)
        ON CONFLICT (user_id, lower(name)) DO NOTHING`,
-      [userId, c.name, c.description ?? null, c.enable_entity_resolution],
+      [userId, c.name, c.description ?? null, c.enable_entity_resolution, c.enable_web_enrichment],
     )
   }
 }
@@ -85,7 +89,7 @@ export async function getPostsForUser(userId: string): Promise<PostWithRelations
   const { rows } = await query<PostWithRelations>(
     `SELECT p.id, p.user_id, p.platform, p.platform_post_id, p.post_url, p.caption,
             p.author_handle, p.author_name, p.thumbnail_url, p.media_type, p.captured_at,
-            p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
+            p.further_reading, p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
             p.created_at, p.updated_at,
             c.name AS category_name,
             e.name AS entity_name, e.location AS entity_location

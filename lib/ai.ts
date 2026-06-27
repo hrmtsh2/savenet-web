@@ -1,7 +1,7 @@
 import { generateText, embed, Output } from "ai"
 import { google } from "@ai-sdk/google"
 import { z } from "zod"
-import type { Category, EntityEnrichmentData, RecommendationCandidate, MessageRole } from "./types"
+import type { Category, EntityEnrichmentData, RecommendationCandidate, MessageRole, FurtherReadingItem } from "./types"
 
 // Call Gemini directly with the user's GOOGLE_GENERATIVE_AI_API_KEY (GCP Tier 1
 // prepaid credits) instead of the rate-limited shared AI Gateway.
@@ -398,6 +398,84 @@ export async function enrichEntityWeb(
   }
 }
 
+/**
+ * Extract URLs from caption/tweet text.
+ */
+export function extractUrls(text: string): string[] {
+  const urlRegex = /https?:\/\/[^\s"<>]+/g
+  const matches = text.match(urlRegex) || []
+  // Deduplicate and filter out obviously useless URLs (Instagram/X own domains)
+  return [...new Set(matches)].filter(
+    (url) =>
+      !url.includes("instagram.com") &&
+      !url.includes("x.com") &&
+      !url.includes("twitter.com") &&
+      !url.includes("t.co/") === false // keep t.co since those are real shortened links
+  )
+}
+
+const urlExtractionSchema = z.object({
+  title: z.string().nullable().describe("Page title or article headline"),
+  snippet: z.string().nullable().describe("A 1-2 sentence summary of the page content"),
+  extracted_data: z
+    .record(z.string(), z.string().nullable())
+    .nullable()
+    .describe(
+      "Structured key-value pairs relevant to the category. " +
+      "For restaurants/food: { price, menuHighlights, cuisine, location }. " +
+      "For articles/papers: { keyPoints, authors, publishedDate }. " +
+      "For products: { price, availability, rating, seller }. " +
+      "Only include keys that have actual values."
+    ),
+})
+
+/**
+ * Visit a URL and extract structured information relevant to the post's category.
+ */
+export async function fetchAndExtractUrl(
+  url: string,
+  categoryName: string,
+  categoryDescription: string | null,
+  meter?: CallMeter,
+): Promise<FurtherReadingItem | null> {
+  if (meter) meter.webSearch += 1
+  try {
+    const { experimental_output } = await generateText({
+      model: TEXT_MODEL,
+      experimental_output: Output.object({ schema: urlExtractionSchema }),
+      system: [
+        `You are extracting useful information from a webpage for a user's "${categoryName}" saved post collection.`,
+        categoryDescription ? `Category description: ${categoryDescription}` : "",
+        "Visit the provided URL and extract the title, a brief summary, and any structured data relevant to this category.",
+        "For food/restaurant pages: extract price range, menu highlights, cuisine type, location.",
+        "For articles/papers/tutorials: extract key points, authors, publication date.",
+        "For product pages: extract price, availability, rating, seller.",
+        "If the page is inaccessible or has no useful content, return null for all fields.",
+      ].filter(Boolean).join(" "),
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Please visit and extract information from this URL: ${url}` },
+          ],
+        },
+      ],
+    })
+
+    if (!experimental_output.title && !experimental_output.snippet) return null
+
+    return {
+      url,
+      title: experimental_output.title,
+      snippet: experimental_output.snippet,
+      extractedData: experimental_output.extracted_data as Record<string, string | null> | null,
+    }
+  } catch (err) {
+    console.log("[ai] fetchAndExtractUrl failed for", url, (err as Error).message)
+    return null
+  }
+}
+
 export interface SynthesisResult {
   reply: string
   citedPostIds: number[]
@@ -434,6 +512,20 @@ export async function synthesizeRecommendation(
         if (c.enrichment.sentiment) lines.push(`Reviews: ${c.enrichment.sentiment}`)
         if (c.enrichment.notes) lines.push(`Note: ${c.enrichment.notes}`)
       }
+      if (c.further_reading && c.further_reading.length > 0) {
+        lines.push("Further reading:")
+        for (const item of c.further_reading) {
+          const dataStr = item.extractedData
+            ? Object.entries(item.extractedData)
+                .filter(([, v]) => v)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(", ")
+            : ""
+          lines.push(
+            `  - ${item.title || item.url}${item.snippet ? `: ${item.snippet}` : ""}${dataStr ? ` (${dataStr})` : ""} → ${item.url}`
+          )
+        }
+      }
       return lines.filter(Boolean).join("\n")
     })
     .join("\n\n")
@@ -465,6 +557,7 @@ export async function synthesizeRecommendation(
     system: [
       `You are SaveNet's recommendation assistant for the user's "${input.categoryName}" saved posts.`,
       "Recommend ONLY from the candidate posts provided below — each is tagged with [POST_REF:<id>] for your reference.",
+      "When a candidate has 'Further reading' links with extracted data (menus, prices, product details), use that data to answer specific questions like 'what's cheapest' or 'what's on the menu'. Surface the relevant links in your reply.",
       "Never invent options that are not among the candidates.",
       "If none of the candidates fit the user's request, say so honestly rather than making something up.",
       "For each recommendation, explain WHY it fits the user's stated preferences.",
