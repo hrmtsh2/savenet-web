@@ -424,6 +424,7 @@ export async function synthesizeRecommendation(
       const label = c.entity_name || c.summary?.slice(0, 60) || `Post ${c.id}`
       const lines = [
         `[POST_REF:${c.id}] ${label} [${c.platform}]`,
+        c.captured_at ? `Saved on: ${new Date(c.captured_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "",
         c.summary ? `Summary: ${c.summary}` : c.enriched_text ? `Details: ${c.enriched_text}` : "",
         c.entity_name ? `Place: ${c.entity_name}${c.entity_location ? `, ${c.entity_location}` : ""}` : "",
       ]

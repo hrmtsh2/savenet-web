@@ -176,7 +176,7 @@ export async function searchSimilarPosts(
   limit = 8,
 ): Promise<RecommendationCandidate[]> {
   const { rows } = await query<RecommendationCandidate>(
-    `SELECT p.id, p.post_url, p.thumbnail_url, p.summary, p.enriched_text, p.platform,
+    `SELECT p.id, p.post_url, p.thumbnail_url, p.captured_at, p.summary, p.enriched_text, p.platform,
             p.entity_id, e.name AS entity_name, e.location AS entity_location,
             (p.embedding <=> $3::vector) AS distance
      FROM posts p

@@ -104,6 +104,7 @@ export interface RecommendationCandidate {
   summary: string | null
   enriched_text: string | null
   platform: Platform
+  captured_at: string | null
   entity_id: number | null
   entity_name: string | null
   entity_location: string | null
