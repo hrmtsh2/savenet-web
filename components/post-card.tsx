@@ -103,6 +103,14 @@ export function PostCard({ post }: { post: PostWithRelations }) {
           </div>
         ) : null}
 
+        {post.captured_at ? (
+          <p className="text-xs text-muted-foreground">
+            Saved {new Date(post.captured_at).toLocaleDateString("en-IN", { 
+              day: "numeric", month: "short", year: "numeric" 
+            })}
+          </p>
+        ) : null}
+
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <a
             href={post.post_url}
