@@ -1,4 +1,4 @@
-export type Platform = "instagram" | "x"
+export type Platform = "instagram" | "x" | "browser_bookmark" | "reading_list"
 
 export interface Category {
   id: number

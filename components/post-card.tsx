@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import Image from "next/image"
-import { ExternalLink, MapPin, Trash2 } from "lucide-react"
+import { ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { deletePost } from "@/app/actions"
-import type { PostWithRelations } from "@/lib/types"
+import type { Platform, PostWithRelations } from "@/lib/types"
 
 function XLogo({ className }: { className?: string }) {
   return (
@@ -36,6 +36,22 @@ function InstagramLogo({ className }: { className?: string }) {
       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
     </svg>
   )
+}
+
+function PlatformIcon({ platform, className }: { platform: Platform; className?: string }) {
+  if (platform === "x") return <XLogo className={className} />
+  if (platform === "instagram") return <InstagramLogo className={className} />
+  if (platform === "browser_bookmark") return <Bookmark className={className} />
+  if (platform === "reading_list") return <BookOpen className={className} />
+  return null
+}
+
+function platformLabel(platform: Platform) {
+  if (platform === "instagram") return "Instagram"
+  if (platform === "x") return "X"
+  if (platform === "browser_bookmark") return "Bookmark"
+  if (platform === "reading_list") return "Reading List"
+  return platform
 }
 
 export function PostCard({ post }: { post: PostWithRelations }) {
@@ -75,12 +91,8 @@ export function PostCard({ post }: { post: PostWithRelations }) {
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <Badge variant="secondary" className="gap-1.5 font-normal">
-            {post.platform === "instagram" ? (
-              <InstagramLogo className="h-3.5 w-3.5" />
-            ) : (
-              <XLogo className="h-3 w-3" />
-            )}
-            {post.platform === "instagram" ? "Instagram" : "X"}
+            <PlatformIcon platform={post.platform} className="h-3.5 w-3.5" />
+            {platformLabel(post.platform)}
           </Badge>
           {post.author_handle ? (
             <span className="truncate text-xs text-muted-foreground">@{post.author_handle.replace(/^@/, "")}</span>

@@ -35,8 +35,8 @@ export async function POST(req: Request) {
   if (!body.postUrl || !body.platform) {
     return Response.json({ error: "platform and postUrl are required" }, { status: 400 })
   }
-  if (body.platform !== "instagram" && body.platform !== "x") {
-    return Response.json({ error: "platform must be 'instagram' or 'x'" }, { status: 400 })
+  if (!["instagram", "x", "browser_bookmark", "reading_list"].includes(body.platform)) {
+    return Response.json({ error: "invalid platform" }, { status: 400 })
   }
 
   const meter = createCallMeter()
@@ -146,20 +146,16 @@ export async function POST(req: Request) {
       if (ocrText) enrichedText = `${enrichedText} ${ocrText}`.trim()
     }
     let furtherReading: FurtherReadingItem[] = []
-    if (assigned?.enable_web_enrichment) {
-      const urls = extractUrls(caption)
-      // Also check raw.tweetTimestamp presence to detect X posts where t.co links
-      // are the main content — for X, also try extracting from raw if needed
-      const tweetText = typeof body.raw?.tweetTimestamp === "string" ? caption : ""
-      const allUrls = [...new Set([...urls])]
-        .slice(0, 3) // max 3 URLs per post to limit API calls
-
+    const isUrlPrimary = body.platform === "browser_bookmark" || body.platform === "reading_list"
+    if (assigned?.enable_web_enrichment || isUrlPrimary) {
+      const urls = isUrlPrimary 
+        ? [body.postUrl]  // the bookmark URL itself is the primary source
+        : extractUrls(caption)
+      
+      const allUrls = [...new Set(urls)].slice(0, 3)
       for (const url of allUrls) {
         const extracted = await fetchAndExtractUrl(
-          url,
-          assigned.name,
-          assigned.description,
-          meter,
+          url, assigned?.name ?? "General", assigned?.description ?? null, meter
         )
         if (extracted) furtherReading.push(extracted)
       }
