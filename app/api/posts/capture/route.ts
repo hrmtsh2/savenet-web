@@ -13,6 +13,7 @@ import {
   totalCalls,
   fetchAndExtractUrl,
   extractUrls,
+  fetchXOembed
 } from "@/lib/ai"
 import type { CapturePayload, Category, FurtherReadingItem } from "@/lib/types"
 
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
     await ensureSeedCategories(userId)
 
     const caption = body.caption ?? ""
-    const scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
+    let scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
 
     // Resolve a thumbnail. X usually sends a working thumbnailUrl directly.
     // Instagram is harder, so the extension can instead send an array of
@@ -112,6 +113,15 @@ export async function POST(req: Request) {
       },
       meter,
     )
+    // For X posts with thin captions, fetch oEmbed for richer text
+    if (body.platform === "x" && (!caption || caption.length < 60)) {
+      const oembed = await fetchXOembed(body.postUrl)
+      if (oembed) {
+        // Append to scopeText rather than replacing caption
+        const existingScope = scopeText || ""        
+        scopeText = `${existingScope} ${oembed}`.trim().slice(0, 4000)
+      }
+    }
 
     // 3. Resolve the assigned category, creating a new one if proposed.
     let assigned: Category | undefined

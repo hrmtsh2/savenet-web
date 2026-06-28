@@ -119,6 +119,23 @@ export async function classifyPost(
   }
 }
 
+/*  oEmbed fallback when caption is short (for X) */
+export async function fetchXOembed(postUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://publish.twitter.com/oembed?url=${encodeURIComponent(postUrl)}&omit_script=true`
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return (data.html as string)
+      ?.replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Run OCR / visual description on a thumbnail image and return extracted text.
  */
