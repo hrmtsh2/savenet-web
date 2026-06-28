@@ -12,26 +12,12 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'SaveNet — Your saved posts, organized',
+  title: "Savenet",
   description:
-    'SaveNet automatically sorts your saved Instagram and X posts into smart categories like Food & Travel, Resources, and Media.',
-  generator: 'v0.app',
+    "AI-enabled sorting and chatting over saved Instagram and X posts.",
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: "/icon.svg",
+    apple: "/icon.svg",
   },
 }
 
