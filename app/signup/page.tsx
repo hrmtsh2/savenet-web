@@ -39,7 +39,7 @@ export default function SignupPage() {
               Start saving<br />smarter today
             </h1>
             <p className="mt-4 text-indigo-200 text-base leading-relaxed">
-              Create your free account and install the browser extension to get started in minutes.
+              Create your account and install the <a href="https://github.com/hrmtsh2/savenet-extension">browser extension</a> to get started in minutes.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export default function SignupPage() {
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">Create an account</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Get started with SaveNet for free
+              Sign up to SaveNet
             </p>
           </div>
 
@@ -84,11 +84,11 @@ export default function SignupPage() {
             onClick={() => signIn("cognito", { callbackUrl: "/library" })}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            Continue with SaveNet
+            Register on SaveNet
           </button>
 
           <p className="text-center text-xs text-muted-foreground leading-relaxed">
-            By creating an account you agree to our terms of service and privacy policy.
+            By creating an account you agree to our terms of service and <a href="https://savenet.am1.tech/privacy">privacy policy</a>.
           </p>
 
           <div className="flex items-center gap-3">
