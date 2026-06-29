@@ -207,7 +207,7 @@ export async function POST(req: Request) {
       `UPDATE posts
        SET category_id = $1, summary = $2, enriched_text = $3, embedding = $4::vector, entity_id = $5,
            thumbnail_url = COALESCE($6, thumbnail_url), further_reading = $7, updated_at = now()
-       WHERE id = $7 AND user_id = $8`,
+       WHERE id = $8 AND user_id = $9`,
       [
         assigned?.id ?? null,
         classification.summary,
