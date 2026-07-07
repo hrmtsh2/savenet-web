@@ -166,7 +166,7 @@ export function ChatView({
       </aside>
 
       {/* Main chat area */}
-      <Card className="flex min-h-[60vh] flex-col overflow-hidden p-0">
+      <Card className="flex h-[calc(100vh-16rem)] flex-col overflow-hidden p-0">
         {!started ? (
           <CategoryPicker categories={categories} onPick={pickCategory} />
         ) : (

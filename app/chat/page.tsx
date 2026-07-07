@@ -16,7 +16,7 @@ export default async function ChatPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 sm:px-6 overflow-hidden">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-balance">Ask your library</h1>
           <p className="mt-1 text-sm text-muted-foreground">
