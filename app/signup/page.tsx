@@ -3,6 +3,7 @@
 import { useSession, signIn } from "next-auth/react"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { useState } from "react";
 
 function SaveNetLogo() {
   return (
@@ -19,6 +20,7 @@ function SaveNetLogo() {
 
 export default function SignupPage() {
   const { status } = useSession()
+  const [loading, setLoading] = useState(false);
 
   if (status === "authenticated") {
     redirect("/library")
@@ -81,10 +83,11 @@ export default function SignupPage() {
           </div>
 
           <button
-            onClick={() => signIn("cognito", { callbackUrl: "/library" })}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            onClick={() => { setLoading(true); signIn("cognito", { callbackUrl: "/library" }) }}
+            disabled = {loading}
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Register on SaveNet
+            {loading ? "Redirecting to Sign Up..." : "Register on SaveNet"}
           </button>
 
           <p className="text-center text-xs text-muted-foreground leading-relaxed">
