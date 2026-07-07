@@ -15,6 +15,7 @@ import type { Category } from "@/lib/types"
 export async function sendChatMessage(input: {
   conversationId?: number | null
   categoryId?: number | null
+  categoryIds: number[] | null
   message: string
 }): Promise<{ ok: true; result: ChatTurnResult } | { ok: false; error: string }> {
   try {

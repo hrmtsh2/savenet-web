@@ -175,7 +175,7 @@ export async function addMessage(
  */
 export async function searchSimilarPosts(
   userId: string,
-  categoryId: number,
+  categoryIds: number[],
   embedding: number[],
   limit = 8,
 ): Promise<RecommendationCandidate[]> {
@@ -185,10 +185,10 @@ export async function searchSimilarPosts(
             (p.embedding <=> $3::vector) AS distance
      FROM posts p
      LEFT JOIN entities e ON e.id = p.entity_id
-     WHERE p.user_id = $1 AND p.category_id = $2 AND p.embedding IS NOT NULL
+     WHERE p.user_id = $1 AND p.category_id = ANY($2::int[]) AND p.embedding IS NOT NULL
      ORDER BY p.embedding <=> $3::vector
      LIMIT $4`,
-    [userId, categoryId, toVectorLiteral(embedding), limit],
+    [userId, categoryIds, toVectorLiteral(embedding), limit],
   )
   return rows
 }

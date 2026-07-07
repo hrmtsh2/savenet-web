@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import ReactMarkdown from "react-markdown"
-import { MessagesSquare, Plus, Send, Sparkles, ArrowLeft, Loader2 } from "lucide-react"
+import { MessagesSquare, Plus, Send, Sparkles, ArrowLeft, Loader2, Check } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -28,7 +28,7 @@ export function ChatView({
 }) {
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [conversationId, setConversationId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState<number | null>(null)
+  const [categoryIds, setCategoryIds] = useState<number[] | null>(null)
   const [messages, setMessages] = useState<UiMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, startSending] = useTransition()
@@ -40,26 +40,26 @@ export function ChatView({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages, sending])
 
-  const activeCategory = categories.find((c) => c.id === categoryId)
-  const started = categoryId != null
+  const activeCategories = categories.filter((c) => categoryIds?.includes(c.id) ?? false)
+  const started = categoryIds != null && categoryIds.length > 0
 
   function startNewChat() {
     setConversationId(null)
-    setCategoryId(null)
+    setCategoryIds(null)
     setMessages([])
     setInput("")
   }
 
-  function pickCategory(id: number) {
-    setCategoryId(id)
+  function pickCategories(ids: number[]) {
+    setCategoryIds(ids)
     setConversationId(null)
     setMessages([])
   }
 
-  function resume(id: number) {
-    if (id === conversationId) return
+  function resume(conv: ConversationListItem) {
+    if (conv.id === conversationId) return
     startLoading(async () => {
-      const res = await loadConversation(id)
+      const res = await loadConversation(conv.id)
       if (!res.ok) {
         toast.error(res.error)
         return
@@ -72,7 +72,10 @@ export function ChatView({
           .filter(Boolean) as ReferencedPost[],
       }))
       setConversationId(res.conversation.id)
-      setCategoryId(res.conversation.category_id)
+      // restore category selection from resumed conversation
+      if (res.conversation.category_id != null) {
+        setCategoryIds([res.conversation.category_id])
+      }
       setMessages(uiMessages)
     })
   }
@@ -80,17 +83,25 @@ export function ChatView({
   function onSend() {
     const text = input.trim()
     if (!text || sending) return
-    if (categoryId == null) {
-      toast.error("Pick a category first")
+    if (!categoryIds || categoryIds.length === 0) {
+      toast.error("Pick at least one category first")
       return
     }
 
     const isNew = conversationId == null
+    // use the first selected category as the primary for the conversation
+    const primaryCategoryId = categoryIds[0]
+
     setMessages((prev) => [...prev, { role: "user", content: text }])
     setInput("")
 
     startSending(async () => {
-      const res = await sendChatMessage({ conversationId, categoryId, message: text })
+      const res = await sendChatMessage({
+        conversationId,
+        categoryId: primaryCategoryId,
+        categoryIds,
+        message: text,
+      })
       if (!res.ok) {
         toast.error(res.error)
         setMessages((prev) => [
@@ -107,12 +118,12 @@ export function ChatView({
       ])
 
       if (isNew) {
-        const cat = categories.find((c) => c.id === categoryId)
+        const cat = categories.find((c) => c.id === primaryCategoryId)
         setConversations((prev) => [
           {
             id: result.conversationId,
             title: text.length <= 60 ? text : text.slice(0, 57) + "…",
-            category_id: categoryId,
+            category_id: primaryCategoryId,
             category_name: cat?.name ?? null,
             created_at: new Date().toISOString(),
           },
@@ -122,12 +133,15 @@ export function ChatView({
     })
   }
 
-  // Group conversations by category name for the sidebar.
   const grouped = conversations.reduce<Record<string, ConversationListItem[]>>((acc, c) => {
     const key = c.category_name ?? "Uncategorized"
     ;(acc[key] ||= []).push(c)
     return acc
   }, {})
+
+  const placeholderText = activeCategories.length > 0
+    ? `Ask about your ${activeCategories.map((c) => c.name).join(", ")} posts…`
+    : "Ask about your saved posts…"
 
   return (
     <div className="grid flex-1 gap-6 lg:grid-cols-[260px_1fr]">
@@ -148,7 +162,7 @@ export function ChatView({
                 {items.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => resume(c.id)}
+                    onClick={() => resume(c)}
                     className={cn(
                       "truncate rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
                       c.id === conversationId
@@ -168,23 +182,25 @@ export function ChatView({
       {/* Main chat area */}
       <Card className="flex h-[calc(100vh-16rem)] flex-col overflow-hidden p-0">
         {!started ? (
-          <CategoryPicker categories={categories} onPick={pickCategory} />
+          <CategoryPicker categories={categories} onPick={pickCategories} />
         ) : (
           <>
-            <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={startNewChat}>
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+              <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={startNewChat}>
                 <ArrowLeft className="h-4 w-4" />
                 Categories
               </Button>
-              <Badge variant="secondary" className="gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                {activeCategory?.name}
-              </Badge>
+              {activeCategories.map((c) => (
+                <Badge key={c.id} variant="secondary" className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  {c.name}
+                </Badge>
+              ))}
             </div>
 
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
               {messages.length === 0 && !loadingConv ? (
-                <EmptyConversation categoryName={activeCategory?.name ?? ""} />
+                <EmptyConversation categoryNames={activeCategories.map((c) => c.name)} />
               ) : null}
 
               {loadingConv ? (
@@ -217,7 +233,7 @@ export function ChatView({
                       onSend()
                     }
                   }}
-                  placeholder={`Ask about your ${activeCategory?.name ?? "saved"} posts…`}
+                  placeholder={placeholderText}
                   className="min-h-[44px] max-h-32 resize-none"
                   rows={1}
                 />
@@ -239,49 +255,82 @@ function CategoryPicker({
   onPick,
 }: {
   categories: CategoryWithCount[]
-  onPick: (id: number) => void
+  onPick: (ids: number[]) => void
 }) {
+  const [selected, setSelected] = useState<number[]>([])
+
+  function toggle(id: number) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
       <div className="flex flex-col items-center gap-2 text-center">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <MessagesSquare className="h-6 w-6" />
         </span>
-        <h2 className="text-lg font-semibold">Which collection should I search?</h2>
+        <h2 className="text-lg font-semibold">Which collections should I search?</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          I&apos;ll only recommend from posts you saved in the category you choose.
+          Select one or more categories. I&apos;ll only recommend from posts you&apos;ve saved in those collections.
         </p>
       </div>
 
       <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
-        {categories.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => onPick(c.id)}
-            disabled={c.post_count === 0}
-            className={cn(
-              "flex flex-col gap-1 rounded-xl border border-border p-4 text-left transition-colors",
-              c.post_count === 0
-                ? "cursor-not-allowed opacity-50"
-                : "hover:border-primary/50 hover:bg-secondary/50",
-            )}
-          >
-            <span className="font-medium">{c.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {c.post_count} saved {c.post_count === 1 ? "post" : "posts"}
-            </span>
-          </button>
-        ))}
+        {categories.map((c) => {
+          const isSelected = selected.includes(c.id)
+          return (
+            <button
+              key={c.id}
+              onClick={() => toggle(c.id)}
+              disabled={c.post_count === 0}
+              className={cn(
+                "flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors",
+                c.post_count === 0
+                  ? "cursor-not-allowed opacity-50 border-border"
+                  : isSelected
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50 hover:bg-secondary/50",
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{c.name}</span>
+                {isSelected && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="h-3 w-3" />
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {c.post_count} saved {c.post_count === 1 ? "post" : "posts"}
+              </span>
+            </button>
+          )
+        })}
       </div>
+
+      <Button
+        onClick={() => { if (selected.length > 0) onPick(selected) }}
+        disabled={selected.length === 0}
+        className="px-8"
+      >
+        {selected.length === 0
+          ? "Select at least one category"
+          : `Chat with ${selected.length === 1 ? "this collection" : `these ${selected.length} collections`}`}
+      </Button>
     </div>
   )
 }
 
-function EmptyConversation({ categoryName }: { categoryName: string }) {
+function EmptyConversation({ categoryNames }: { categoryNames: string[] }) {
+  const label = categoryNames.length === 1
+    ? categoryNames[0]
+    : categoryNames.slice(0, -1).join(", ") + " & " + categoryNames.at(-1)
   return (
     <div className="flex flex-col items-center gap-2 py-10 text-center">
       <Sparkles className="h-7 w-7 text-primary" />
-      <p className="text-sm font-medium">Ask me anything about your {categoryName} posts</p>
+      <p className="text-sm font-medium">Ask me anything about your {label} posts</p>
       <p className="max-w-xs text-xs text-muted-foreground">
         e.g. &quot;Where should I eat tonight?&quot; or &quot;Find me a quick weeknight recipe.&quot;
       </p>

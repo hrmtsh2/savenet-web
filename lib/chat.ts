@@ -21,6 +21,7 @@ import type { ReferencedPost, RecommendationCandidate } from "./types"
 export interface ChatTurnInput {
   conversationId?: number | null
   categoryId?: number | null
+  categoryIds?: number[] | null
   message: string
 }
 
@@ -82,7 +83,8 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
 
   // 3. Embed the user's message and run in-category vector similarity search.
   const queryEmbedding = await embedText(message, meter)
-  const candidates = await searchSimilarPosts(userId, categoryId, queryEmbedding, 8)
+  const searchCategoryIds = input.categoryIds?.length ? input.categoryIds : [categoryId]
+  const candidates = await searchSimilarPosts(userId, searchCategoryIds, queryEmbedding, 8)
 
   // 4. Attach fresh (cached <21d) or newly fetched web enrichment per entity.
   const seenEntities = new Map<number, RecommendationCandidate["enrichment"]>()
