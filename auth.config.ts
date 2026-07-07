@@ -8,6 +8,11 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.COGNITO_CLIENT_ID!,
       clientSecret: process.env.COGNITO_CLIENT_SECRET!,
       issuer: process.env.COGNITO_ISSUER!,
+      authorization: {
+        params: {
+          prompt: "login"
+        }
+      }
     }),
   ],
   session: {

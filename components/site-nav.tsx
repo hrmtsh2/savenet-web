@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react"
 import { Bookmark, Library, FolderCog, MessagesSquare, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { getCognitoLogoutUrl } from "@/lib/signout"
 
 const links = [
   { href: "/library", label: "Library", icon: Library },
@@ -57,7 +58,10 @@ export function SiteNav() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => {
+                await signOut({ redirect: false })
+                window.location.href = getCognitoLogoutUrl()
+              }}
               title="Log out"
               className="text-indigo-100 hover:bg-white/10 hover:text-white"
             >
