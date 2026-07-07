@@ -31,8 +31,10 @@ export default function LoginPage() {
       {/* Left — brand panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-indigo-600 p-12">
         <div className="flex items-center gap-3">
-          <SaveNetLogo />
-          <span className="text-xl font-semibold text-white">SaveNet</span>
+          <Link href="/" className="flex items-center grap-3">
+            <SaveNetLogo />
+            <span className="text-xl font-semibold text-white">SaveNet</span>
+          </Link>
         </div>
 
         <div className="flex flex-col gap-8">
@@ -68,10 +70,12 @@ export default function LoginPage() {
       <div className="flex w-full lg:w-1/2 flex-col items-center justify-center px-8 py-12 bg-background">
         {/* Mobile logo */}
         <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
-            <SaveNetLogo />
-          </div>
-          <span className="text-xl font-semibold">SaveNet</span>
+          <Link href="/" className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
+              <SaveNetLogo />
+            </div>
+            <span className="text-xl font-semibold">SaveNet</span>
+          </Link>          
         </div>
 
         <div className="w-full max-w-sm flex flex-col gap-6">
