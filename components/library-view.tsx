@@ -36,43 +36,42 @@ export function LibraryView({ categories, posts, uncategorizedCount }: Props) {
   ]
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="gap-6">
-      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <TabsList className="h-auto flex-nowrap justify-start gap-1 bg-transparent p-0">
-          {tabs.map((t) => (
-            <TabsTrigger
-              key={t.value}
-              value={t.value}
-              className="shrink-0 gap-2 rounded-full border border-transparent px-4 py-2 data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:shadow-sm"
+    <Tabs value={tab} onValueChange={setTab} className="flex flex-col gap-4">
+      <TabsList className="flex h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
+        {tabs.map((t) => (
+          <TabsTrigger
+            key={t.value}
+            value={t.value}
+            className="shrink-0 gap-2 rounded-full border border-transparent px-4 py-2 text-sm data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:shadow-sm"
+          >
+            {t.label}
+            <Badge
+              variant="secondary"
+              className="h-5 min-w-5 justify-center rounded-full px-1.5 text-xs tabular-nums"
             >
-              {t.label}
-              <Badge
-                variant="secondary"
-                className="h-5 min-w-5 justify-center rounded-full px-1.5 text-xs tabular-nums"
-              >
-                {t.count}
-              </Badge>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+              {t.count}
+            </Badge>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <div className="min-h-0 flex-1">
+        {tabs.map((t) => {
+          const items = grouped.get(t.value) ?? []
+          return (
+            <TabsContent key={t.value} value={t.value} className="mt-0 min-h-0">
+              {items.length === 0 ? (
+                <EmptyState label={t.label} />
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {items.map((post) => (
+                    <PostCard key={post.id} post={post} />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )
+        })}
       </div>
-
-      {tabs.map((t) => {
-        const items = grouped.get(t.value) ?? []
-        return (
-          <TabsContent key={t.value} value={t.value} className="mt-0">
-            {items.length === 0 ? (
-              <EmptyState label={t.label} />
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        )
-      })}
     </Tabs>
   )
 }
