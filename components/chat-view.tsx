@@ -266,59 +266,61 @@ function CategoryPicker({
   }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <MessagesSquare className="h-6 w-6" />
-        </span>
-        <h2 className="text-lg font-semibold">Which collections should I search?</h2>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Select one or more categories. I&apos;ll only recommend from posts you&apos;ve saved in those collections.
-        </p>
-      </div>
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-col items-center gap-6 p-6">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <MessagesSquare className="h-6 w-6" />
+          </span>
+          <h2 className="text-lg font-semibold">Which collections should I search?</h2>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Select one or more categories. I&apos;ll only recommend from posts you&apos;ve saved in those collections.
+          </p>
+        </div>
 
-      <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
-        {categories.map((c) => {
-          const isSelected = selected.includes(c.id)
-          return (
-            <button
-              key={c.id}
-              onClick={() => toggle(c.id)}
-              disabled={c.post_count === 0}
-              className={cn(
-                "flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors",
-                c.post_count === 0
-                  ? "cursor-not-allowed opacity-50 border-border"
-                  : isSelected
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50 hover:bg-secondary/50",
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{c.name}</span>
-                {isSelected && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Check className="h-3 w-3" />
-                  </span>
+        <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2">
+          {categories.map((c) => {
+            const isSelected = selected.includes(c.id)
+            return (
+              <button
+                key={c.id}
+                onClick={() => toggle(c.id)}
+                disabled={c.post_count === 0}
+                className={cn(
+                  "flex flex-col gap-1 rounded-xl border p-4 text-left transition-colors",
+                  c.post_count === 0
+                    ? "cursor-not-allowed opacity-50 border-border"
+                    : isSelected
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50 hover:bg-secondary/50",
                 )}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {c.post_count} saved {c.post_count === 1 ? "post" : "posts"}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{c.name}</span>
+                  {isSelected && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {c.post_count} saved {c.post_count === 1 ? "post" : "posts"}
+                </span>
+              </button>
+            )
+          })}
+        </div>
 
-      <Button
-        onClick={() => { if (selected.length > 0) onPick(selected) }}
-        disabled={selected.length === 0}
-        className="px-8"
-      >
-        {selected.length === 0
-          ? "Select at least one category"
-          : `Chat with ${selected.length === 1 ? "this collection" : `these ${selected.length} collections`}`}
-      </Button>
+        <Button
+          onClick={() => { if (selected.length > 0) onPick(selected) }}
+          disabled={selected.length === 0}
+          className="px-8 sticky bottom-4"
+        >
+          {selected.length === 0
+            ? "Select at least one category"
+            : `Chat with ${selected.length === 1 ? "this collection" : `these ${selected.length} collections`}`}
+        </Button>
+      </div>
     </div>
   )
 }
