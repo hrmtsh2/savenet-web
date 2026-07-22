@@ -50,7 +50,7 @@ export default function LoginPage() {
           <ul className="flex flex-col gap-4">
             {[
               "Captures posts from Instagram and X as you save them",
-              "Automatically classifies into categories you define",
+              "Keeps source and collection labels on every save",
               "Chat with your saves — get recommendations, menus, prices",
             ].map((feature) => (
               <li key={feature} className="flex items-start gap-3">

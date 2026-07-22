@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-medium">How we use your data</h2>
             <ul className="flex flex-col gap-2 text-muted-foreground">
-              <li>Post content is processed by Google Gemini to generate summaries, classifications, and vector embeddings for search. This processing happens server-side via the Vercel AI Gateway.</li>
+              <li>Post content is processed by Google Gemini for optional enrichment and vector embeddings used in search. This processing happens server-side via the Vercel AI Gateway.</li>
               <li>Post URLs may be fetched server-side to extract additional context (page title, description, menu information) to improve recommendations.</li>
               <li>Your data is stored in Amazon Aurora PostgreSQL, hosted in the AWS Asia Pacific (Mumbai) region.</li>
             </ul>
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
             <h2 className="text-base font-medium">Third-party services</h2>
             <ul className="flex flex-col gap-2 text-muted-foreground">
               <li><span className="font-medium text-foreground">AWS Cognito</span> — handles account creation and authentication.</li>
-              <li><span className="font-medium text-foreground">Amazon Aurora PostgreSQL</span> — stores your posts, categories, and chat history.</li>
+              <li><span className="font-medium text-foreground">Amazon Aurora PostgreSQL</span> — stores your posts, labels, and chat history.</li>
               <li><span className="font-medium text-foreground">Google Gemini (via Vercel AI Gateway)</span> — generates summaries, embeddings, and chat responses.</li>
               <li><span className="font-medium text-foreground">Vercel</span> — hosts the SaveNet web application.</li>
             </ul>
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
 
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-medium">Data retention and deletion</h2>
-            <p className="text-muted-foreground">Your posts, categories, and conversations are retained until you delete them. You can delete individual posts from the library view. To delete your account and all associated data, contact us at the email below.</p>
+            <p className="text-muted-foreground">Your posts, labels, and conversations are retained until you delete them. You can delete individual posts from the library view. To delete your account and all associated data, contact us at the email below.</p>
           </section>
 
           <section className="flex flex-col gap-2">

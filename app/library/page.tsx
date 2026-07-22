@@ -1,17 +1,15 @@
 import { SiteNav } from "@/components/site-nav"
 import { LibraryView } from "@/components/library-view"
 import { requireUserId } from "@/lib/auth"
-import { ensureSeedCategories, getCategoriesWithCounts, getPostsForUser, getUncategorizedCount } from "@/lib/queries"
+import { getCategoriesWithCounts, getPostsForUser } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
 export default async function LibraryPage() {
   const userId = await requireUserId()
-  await ensureSeedCategories(userId)
-  const [categories, posts, uncategorizedCount] = await Promise.all([
+  const [categories, posts] = await Promise.all([
     getCategoriesWithCounts(userId),
     getPostsForUser(userId),
-    getUncategorizedCount(userId),
   ])
 
   const total = posts.length
@@ -24,12 +22,12 @@ export default async function LibraryPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-balance">Library</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {total === 0
-              ? "Your saved posts will appear here, grouped by category."
-              : `${total} saved ${total === 1 ? "post" : "posts"} across your categories.`}
+              ? "Your saved posts will appear here with source and collection labels."
+              : `${total} saved ${total === 1 ? "post" : "posts"}, organized with labels.`}
           </p>
         </div>
 
-        <LibraryView categories={categories} posts={posts} uncategorizedCount={uncategorizedCount} />
+        <LibraryView categories={categories} posts={posts} />
       </main>
     </div>
   )

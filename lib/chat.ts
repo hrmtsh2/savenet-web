@@ -1,4 +1,4 @@
-import { ensureSeedCategories, getCategories } from "./queries"
+import { getCategories } from "./queries"
 import {
   createConversation,
   getConversation,
@@ -52,8 +52,6 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
   if (!message) throw new ChatError("message is required", 400)
 
   const meter = createCallMeter()
-  await ensureSeedCategories(userId)
-
   // 1. Resolve (or create) the conversation, scoped to a category.
   let conversation = null
   if (input.conversationId != null) {

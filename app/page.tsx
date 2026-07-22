@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/auth.config"
-import { redirect } from "next/navigation"
 
 function SaveNetLogo() {
   return (
@@ -18,7 +17,6 @@ function SaveNetLogo() {
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions)
-  if (session) redirect("/library")
 
   return (
     <div className="min-h-screen bg-background">
@@ -144,8 +142,8 @@ export default async function LandingPage() {
                 description: "Import existing bookmark folders or your Chrome Reading List with a single click from the extension.",
               },
               {
-                title: "Smart categories",
-                description: "SaveNet classifies every save into categories you define. New categories are created automatically when nothing fits.",
+                title: "Labels you control",
+                description: "SaveNet keeps source and collection labels on every save, while you create any extra labels you want.",
               },
               {
                 title: "AI chat",

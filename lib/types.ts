@@ -54,8 +54,16 @@ export interface Post {
 // Post joined with category + entity details for display
 export interface PostWithRelations extends Post {
   category_name: string | null
+  labels: Label[]
   entity_name: string | null
   entity_location: string | null
+}
+
+/** A label is stored in the legacy `categories` table during the transition. */
+export interface Label {
+  id: number
+  name: string
+  system: boolean
 }
 
 export interface CategoryWithCount extends Category {

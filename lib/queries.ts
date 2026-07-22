@@ -10,53 +10,44 @@ import type {
   EntityEnrichmentData,
 } from "./types"
 
-const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "description" | "enable_entity_resolution" | "enable_web_enrichment">> = [
-  {
-    name: "Food & Travel",
-    description: "restaurants, cafes, travel spots, things to visit or eat",
-    enable_entity_resolution: true,
-    enable_web_enrichment: true,
-  },
-  {
-    name: "Resources",
-    description: "tutorials, tools, discounts, learning material",
-    enable_entity_resolution: false,
-    enable_web_enrichment: true,
-  },
-  {
-    name: "Media",
-    description: "movie/book/album/show recommendations",
-    enable_entity_resolution: false,
-    enable_web_enrichment: true
-  },
-  {
-    name: "Other",
-    description: null as unknown as string,
-    enable_entity_resolution: false,
-    enable_web_enrichment: true
-  },
-]
+const SOURCE_LABELS = {
+  instagram: "Instagram",
+  x: "X",
+  browser_bookmark: "Browser Bookmark",
+  reading_list: "Reading List",
+} as const
 
-/** Ensure the user has their seed categories. Idempotent. */
-export async function ensureSeedCategories(userId: string): Promise<void> {
-  const { rows } = await query<{ count: string }>("SELECT count(*)::text AS count FROM categories WHERE user_id = $1", [
-    userId,
-  ])
-  if (Number(rows[0]?.count ?? "0") > 0) return
+/** Labels are only created deliberately: by a user, a source capture, or an import. */
+export async function getOrCreateLabel(userId: string, name: string, system = false): Promise<Category> {
+  const { rows } = await query<Category>(
+    `INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)
+     VALUES ($1, $2, NULL, false, false, $3)
+     ON CONFLICT (user_id, lower(name)) DO UPDATE SET name = categories.name
+     RETURNING id, user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created, created_at`,
+    [userId, name, system],
+  )
+  return rows[0]
+}
 
-  for (const c of DEFAULT_CATEGORIES) {
+export async function attachLabels(postId: number, userId: string, names: Array<{ name: string; system?: boolean }>) {
+  const unique = new Map(names.map((label) => [label.name.trim().toLocaleLowerCase(), label]))
+  for (const label of unique.values()) {
+    if (!label.name.trim()) continue
+    const saved = await getOrCreateLabel(userId, label.name.trim(), Boolean(label.system))
     await query(
-      `INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)
-       VALUES ($1, $2, $3, $4, $5, false)
-       ON CONFLICT (user_id, lower(name)) DO NOTHING`,
-      [userId, c.name, c.description ?? null, c.enable_entity_resolution, c.enable_web_enrichment],
+      `INSERT INTO post_labels (post_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [postId, saved.id],
     )
   }
 }
 
+export function sourceLabelFor(platform: keyof typeof SOURCE_LABELS) {
+  return SOURCE_LABELS[platform]
+}
+
 export async function getCategories(userId: string): Promise<Category[]> {
   const { rows } = await query<Category>(
-    `SELECT id, user_id, name, description, enable_entity_resolution, auto_created, created_at
+    `SELECT id, user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created, created_at
      FROM categories WHERE user_id = $1 ORDER BY created_at ASC, id ASC`,
     [userId],
   )
@@ -65,24 +56,16 @@ export async function getCategories(userId: string): Promise<Category[]> {
 
 export async function getCategoriesWithCounts(userId: string): Promise<CategoryWithCount[]> {
   const { rows } = await query<CategoryWithCount>(
-    `SELECT c.id, c.user_id, c.name, c.description, c.enable_entity_resolution, c.auto_created, c.created_at,
-            count(p.id)::int AS post_count
+    `SELECT c.id, c.user_id, c.name, c.description, c.enable_entity_resolution, c.enable_web_enrichment, c.auto_created, c.created_at,
+            count(pl.post_id)::int AS post_count
      FROM categories c
-     LEFT JOIN posts p ON p.category_id = c.id AND p.user_id = c.user_id
+     LEFT JOIN post_labels pl ON pl.label_id = c.id
      WHERE c.user_id = $1
      GROUP BY c.id
      ORDER BY c.created_at ASC, c.id ASC`,
     [userId],
   )
   return rows
-}
-
-export async function getUncategorizedCount(userId: string): Promise<number> {
-  const { rows } = await query<{ count: string }>(
-    "SELECT count(*)::text AS count FROM posts WHERE user_id = $1 AND category_id IS NULL",
-    [userId],
-  )
-  return Number(rows[0]?.count ?? "0")
 }
 
 export async function getPostsForUser(userId: string): Promise<PostWithRelations[]> {
@@ -92,9 +75,17 @@ export async function getPostsForUser(userId: string): Promise<PostWithRelations
             p.further_reading, p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
             p.created_at, p.updated_at,
             c.name AS category_name,
+            COALESCE(labels.labels, '[]'::json) AS labels,
             e.name AS entity_name, e.location AS entity_location
      FROM posts p
      LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN LATERAL (
+       SELECT json_agg(json_build_object('id', label.id, 'name', label.name, 'system', label.auto_created)
+         ORDER BY label.name) AS labels
+       FROM post_labels pl
+       JOIN categories label ON label.id = pl.label_id
+       WHERE pl.post_id = p.id
+     ) labels ON true
      LEFT JOIN entities e ON e.id = p.entity_id
      WHERE p.user_id = $1
      ORDER BY p.created_at DESC, p.id DESC`,
@@ -185,7 +176,11 @@ export async function searchSimilarPosts(
             (p.embedding <=> $3::vector) AS distance
      FROM posts p
      LEFT JOIN entities e ON e.id = p.entity_id
-     WHERE p.user_id = $1 AND p.category_id = ANY($2::int[]) AND p.embedding IS NOT NULL
+     WHERE p.user_id = $1
+       AND p.embedding IS NOT NULL
+       AND EXISTS (
+         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($2::int[])
+       )
      ORDER BY p.embedding <=> $3::vector
      LIMIT $4`,
     [userId, categoryIds, toVectorLiteral(embedding), limit],
@@ -226,9 +221,16 @@ export async function getPostsByIds(userId: string, ids: number[]): Promise<Post
             p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
             p.created_at, p.updated_at,
             c.name AS category_name,
+            COALESCE(labels.labels, '[]'::json) AS labels,
             e.name AS entity_name, e.location AS entity_location
      FROM posts p
      LEFT JOIN categories c ON c.id = p.category_id
+     LEFT JOIN LATERAL (
+       SELECT json_agg(json_build_object('id', label.id, 'name', label.name, 'system', label.auto_created)
+         ORDER BY label.name) AS labels
+       FROM post_labels pl JOIN categories label ON label.id = pl.label_id
+       WHERE pl.post_id = p.id
+     ) labels ON true
      LEFT JOIN entities e ON e.id = p.entity_id
      WHERE p.user_id = $1 AND p.id = ANY($2)`,
     [userId, ids],

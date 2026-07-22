@@ -1,13 +1,12 @@
 import { SiteNav } from "@/components/site-nav"
 import { ChatView } from "@/components/chat-view"
 import { requireUserId } from "@/lib/auth"
-import { ensureSeedCategories, getCategoriesWithCounts, listConversations } from "@/lib/queries"
+import { getCategoriesWithCounts, listConversations } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
 export default async function ChatPage() {
   const userId = await requireUserId()
-  await ensureSeedCategories(userId)
   const [categories, conversations] = await Promise.all([
     getCategoriesWithCounts(userId),
     listConversations(userId),
@@ -20,7 +19,7 @@ export default async function ChatPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-balance">Ask your library</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pick a category and ask for a recommendation. Answers come only from posts you&apos;ve saved.
+            Pick one or more labels and ask for a recommendation. Answers come only from posts you&apos;ve saved.
           </p>
         </div>
 

@@ -1,8 +1,7 @@
 import { query, toVectorLiteral } from "@/lib/db"
 import { authenticateRequest } from "@/lib/auth"
-import { ensureSeedCategories, getCategories } from "@/lib/queries"
+import { attachLabels, sourceLabelFor } from "@/lib/queries"
 import {
-  classifyPost,
   ocrImage,
   embedText,
   extractEntity,
@@ -15,7 +14,7 @@ import {
   extractUrls,
   fetchXOembed
 } from "@/lib/ai"
-import type { CapturePayload, Category, FurtherReadingItem } from "@/lib/types"
+import type { CapturePayload, FurtherReadingItem } from "@/lib/types"
 
 export const maxDuration = 60
 
@@ -42,8 +41,6 @@ export async function POST(req: Request) {
   const meter = createCallMeter()
 
   try {
-    await ensureSeedCategories(userId)
-
     const caption = body.caption ?? ""
     let scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
 
@@ -103,16 +100,6 @@ export async function POST(req: Request) {
     )
     const postId = upsert.rows[0].id
 
-    // 2. Classify against the user's current categories.
-    const categories = await getCategories(userId)
-    const classification = await classifyPost(
-      {
-        caption,
-        scopeText,
-        categories: categories.map((c) => ({ id: c.id, name: c.name, description: c.description })),
-      },
-      meter,
-    )
     // For X posts with thin captions, fetch oEmbed for richer text
     if (body.platform === "x" && (!caption || caption.length < 60)) {
       const oembed = await fetchXOembed(body.postUrl)
@@ -123,31 +110,25 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. Resolve the assigned category, creating a new one if proposed.
-    let assigned: Category | undefined
-    if (classification.categoryId != null) {
-      assigned = categories.find((c) => c.id === classification.categoryId)
-    }
-    if (!assigned && classification.newCategory) {
-      const created = await query<Category>(
-        `INSERT INTO categories (user_id, name, description, enable_entity_resolution, auto_created)
-         VALUES ($1, $2, $3, false, true)
-         ON CONFLICT (user_id, lower(name)) DO UPDATE SET description = EXCLUDED.description
-         RETURNING id, user_id, name, description, enable_entity_resolution, auto_created, created_at`,
-        [userId, classification.newCategory.name, classification.newCategory.description],
-      )
-      assigned = created.rows[0]
-    }
+    // 2. Labels are deterministic, never AI-assigned. Every capture is labelled
+    // with its source; Instagram collection imports add their collection name.
+    const collectionName = typeof body.raw?.collectionName === "string" ? body.raw.collectionName.trim() : ""
+    await attachLabels(postId, userId, [
+      { name: sourceLabelFor(body.platform), system: true },
+      ...(body.platform === "instagram" && collectionName ? [{ name: collectionName, system: true }] : []),
+    ])
 
-    // 4. Build enriched_text = caption + " " + summary (+ OCR text when available).
-    let enrichedText = `${caption} ${classification.summary}`.trim()
+    // 3. Build enriched text directly from the saved content. Classification
+    // previously generated the summary; that model call is deliberately gone.
+    const summary = caption || scopeText || null
+    let enrichedText = `${caption} ${scopeText ?? ""}`.trim()
     if (thumbnailUrl) {
       const ocrText = await ocrImage(thumbnailUrl, meter)
       if (ocrText) enrichedText = `${enrichedText} ${ocrText}`.trim()
     }
     let furtherReading: FurtherReadingItem[] = []
     const isUrlPrimary = body.platform === "browser_bookmark" || body.platform === "reading_list"
-    if (assigned?.enable_web_enrichment || isUrlPrimary) {
+    if (isUrlPrimary || extractUrls(caption).length > 0) {
       const urls = isUrlPrimary 
         ? [body.postUrl]  // the bookmark URL itself is the primary source
         : extractUrls(caption)
@@ -155,7 +136,7 @@ export async function POST(req: Request) {
       const allUrls = [...new Set(urls)].slice(0, 3)
       for (const url of allUrls) {
         const extracted = await fetchAndExtractUrl(
-          url, assigned?.name ?? "General", assigned?.description ?? null, meter
+          url, "Saved post", null, meter
         )
         if (extracted) furtherReading.push(extracted)
       }
@@ -164,16 +145,15 @@ export async function POST(req: Request) {
     // 5. Embed enriched_text.
     const embedding = await embedText(enrichedText, meter)
 
-    // 6. Entity resolution when the assigned category opts in. The KIND of
-    // entity (place, sports_team, person, etc.) is inferred from the category.
+    // 5. Entity resolution enriches content but no longer influences labels.
     let entityId: number | null = null
     let resolvedEntity: { name: string; location: string | null } | null = null
-    if (assigned?.enable_entity_resolution) {
+    if (summary) {
       const entity = await extractEntity(
         {
-          summary: classification.summary,
-          categoryName: assigned.name,
-          categoryDescription: assigned.description,
+          summary,
+          categoryName: "Saved post",
+          categoryDescription: null,
         },
         meter,
       )
@@ -194,7 +174,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 6b. Thumbnail fallback: if we still have no image but resolved an entity,
+    // 5b. Thumbnail fallback: if we still have no image but resolved an entity,
     // try to find a representative photo for it via grounded search.
     // Best-effort — may return null, in which case the card shows a placeholder.
     if (!thumbnailUrl && resolvedEntity) {
@@ -202,15 +182,15 @@ export async function POST(req: Request) {
       if (entityImage) thumbnailUrl = entityImage
     }
 
-    // 7. Persist enrichment results.
+    // 6. Persist enrichment results. category_id remains untouched so existing
+    // installs retain their legacy assignment while labels drive the product.
     await query(
       `UPDATE posts
-       SET category_id = $1, summary = $2, enriched_text = $3, embedding = $4::vector, entity_id = $5,
-           thumbnail_url = COALESCE($6, thumbnail_url), further_reading = $7, updated_at = now()
-       WHERE id = $8 AND user_id = $9`,
+       SET summary = $1, enriched_text = $2, embedding = $3::vector, entity_id = $4,
+           thumbnail_url = COALESCE($5, thumbnail_url), further_reading = $6, updated_at = now()
+       WHERE id = $7 AND user_id = $8`,
       [
-        assigned?.id ?? null,
-        classification.summary,
+        summary,
         enrichedText,
         toVectorLiteral(embedding),
         entityId,
@@ -223,10 +203,8 @@ export async function POST(req: Request) {
 
     return Response.json({
       id: postId,
-      categoryId: assigned?.id ?? null,
-      categoryName: assigned?.name ?? null,
-      createdNewCategory: Boolean(classification.newCategory && assigned?.auto_created),
-      summary: classification.summary,
+      labels: [sourceLabelFor(body.platform), ...(collectionName ? [collectionName] : [])],
+      summary,
       entityId,
       thumbnailUrl: thumbnailUrl || null,
       modelCalls: totalCalls(meter),

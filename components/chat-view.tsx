@@ -84,7 +84,7 @@ export function ChatView({
     const text = input.trim()
     if (!text || sending) return
     if (!categoryIds || categoryIds.length === 0) {
-      toast.error("Pick at least one category first")
+      toast.error("Pick at least one label first")
       return
     }
 
@@ -188,7 +188,7 @@ export function ChatView({
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
               <Button variant="ghost" size="sm" className="gap-1.5 shrink-0" onClick={startNewChat}>
                 <ArrowLeft className="h-4 w-4" />
-                Categories
+                Labels
               </Button>
               {activeCategories.map((c) => (
                 <Badge key={c.id} variant="secondary" className="gap-1.5">
@@ -274,7 +274,7 @@ function CategoryPicker({
           </span>
           <h2 className="text-lg font-semibold">Which collections should I search?</h2>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Select one or more categories. I&apos;ll only recommend from posts you&apos;ve saved in those collections.
+            Select one or more labels. I&apos;ll only recommend from posts you&apos;ve saved with those labels.
           </p>
         </div>
 
@@ -317,7 +317,7 @@ function CategoryPicker({
           className="px-8 sticky bottom-4"
         >
           {selected.length === 0
-            ? "Select at least one category"
+            ? "Select at least one label"
             : `Chat with ${selected.length === 1 ? "this collection" : `these ${selected.length} collections`}`}
         </Button>
       </div>

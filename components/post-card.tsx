@@ -99,6 +99,14 @@ export function PostCard({ post }: { post: PostWithRelations }) {
           ) : null}
         </div>
 
+        {post.labels.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {post.labels.map((label) => (
+              <Badge key={label.id} variant="outline" className="font-normal">{label.name}</Badge>
+            ))}
+          </div>
+        ) : null}
+
         {caption ? <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">{caption}</p> : null}
 
         {summary ? (
