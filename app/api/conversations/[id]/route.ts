@@ -3,7 +3,7 @@ import { getConversation, getMessages } from "@/lib/queries"
 
 // GET /api/conversations/:id — full message history for resuming a conversation.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const userId = authenticateRequest(req)
+  const userId = await authenticateRequest(req)
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params

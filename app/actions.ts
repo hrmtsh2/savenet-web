@@ -36,7 +36,6 @@ export async function loadConversation(conversationId: number) {
   return { ok: true as const, conversation, messages, postsById }
 }
 
-/** Creates a persistent, user-owned label. Labels are never AI-created. */
 export async function createCategory(formData: FormData) {
   const userId = await requireUserId()
   const name = String(formData.get("name") || "").trim()

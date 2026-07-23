@@ -59,7 +59,6 @@ export function PostCard({ post }: { post: PostWithRelations }) {
   const summary = post.summary?.trim() || ""
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
-  // IG CDN URLs expire and can fail to load; fall back to the placeholder.
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(post.thumbnail_url) && !imageFailed
 

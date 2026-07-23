@@ -40,19 +40,11 @@ export class ChatError extends Error {
   }
 }
 
-/**
- * Runs a single chat turn: resolve/create the conversation, persist the user
- * message, vector-search the category's posts, enrich entities via cached or
- * fresh web search, synthesize a recommendation from the candidates, and persist
- * the assistant reply. Shared by the API route (Bearer auth) and the UI server
- * action (session user), so the logic lives in one place.
- */
 export async function runChatTurn(userId: string, input: ChatTurnInput): Promise<ChatTurnResult> {
   const message = input.message?.trim()
   if (!message) throw new ChatError("message is required", 400)
 
   const meter = createCallMeter()
-  // 1. Resolve (or create) the conversation, scoped to a category.
   let conversation = null
   if (input.conversationId != null) {
     conversation = await getConversation(userId, input.conversationId)
@@ -75,16 +67,13 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
   const categories = await getCategories(userId)
   const categoryName = categories.find((c) => c.id === categoryId)?.name ?? "Saved posts"
 
-  // 2. Load history, then persist the new user message.
   const history = await getMessages(conversation.id)
   await addMessage(conversation.id, "user", message)
 
-  // 3. Embed the user's message and run in-category vector similarity search.
   const queryEmbedding = await embedText(message, meter)
   const searchCategoryIds = input.categoryIds?.length ? input.categoryIds : [categoryId]
   const candidates = await searchSimilarPosts(userId, searchCategoryIds, queryEmbedding, 8)
 
-  // 4. Attach fresh (cached <21d) or newly fetched web enrichment per entity.
   const seenEntities = new Map<number, RecommendationCandidate["enrichment"]>()
   for (const c of candidates) {
     if (c.entity_id == null || !c.entity_name) continue
@@ -101,7 +90,6 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
     seenEntities.set(c.entity_id, data)
   }
 
-  // 5. Synthesize a recommendation strictly from the candidate posts.
   const { reply, citedPostIds } = await synthesizeRecommendation(
     {
       history: history.map((m) => ({ role: m.role, content: m.content })),
@@ -112,10 +100,8 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
     meter,
   )
 
-  // 6. Persist the assistant reply with the cited post ids.
   await addMessage(conversation.id, "assistant", reply, citedPostIds)
 
-  // 7. Build the referenced-post payload, preserving citation order.
   const byId = new Map(candidates.map((c) => [c.id, c]))
   const referencedPosts: ReferencedPost[] = citedPostIds
     .map((id) => byId.get(id))

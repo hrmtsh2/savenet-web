@@ -44,9 +44,6 @@ export async function POST(req: Request) {
     const caption = body.caption ?? ""
     let scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
 
-    // Resolve a thumbnail. X usually sends a working thumbnailUrl directly.
-    // Instagram is harder, so the extension can instead send an array of
-    // candidate image URLs in raw.candidateImages and let Gemini pick the best.
     let thumbnailUrl = body.thumbnailUrl ?? ""
     const candidateImages = Array.isArray(body.raw?.candidateImages)
       ? (body.raw!.candidateImages as unknown[]).filter((u): u is string => typeof u === "string")
@@ -64,7 +61,6 @@ export async function POST(req: Request) {
       if (picked) thumbnailUrl = picked
     }
 
-    // 1. Upsert the base post keyed on (user_id, post_url).
     const upsert = await query<{ id: number }>(
       `INSERT INTO posts (
          user_id, platform, platform_post_id, post_url, caption, author_handle,
@@ -100,26 +96,20 @@ export async function POST(req: Request) {
     )
     const postId = upsert.rows[0].id
 
-    // For X posts with thin captions, fetch oEmbed for richer text
     if (body.platform === "x" && (!caption || caption.length < 60)) {
       const oembed = await fetchXOembed(body.postUrl)
       if (oembed) {
-        // Append to scopeText rather than replacing caption
         const existingScope = scopeText || ""        
         scopeText = `${existingScope} ${oembed}`.trim().slice(0, 4000)
       }
     }
 
-    // 2. Labels are deterministic, never AI-assigned. Every capture is labelled
-    // with its source; Instagram collection imports add their collection name.
     const collectionName = typeof body.raw?.collectionName === "string" ? body.raw.collectionName.trim() : ""
     await attachLabels(postId, userId, [
       { name: sourceLabelFor(body.platform), system: true },
       ...(body.platform === "instagram" && collectionName ? [{ name: collectionName, system: true }] : []),
     ])
 
-    // 3. Build enriched text directly from the saved content. Classification
-    // previously generated the summary; that model call is deliberately gone.
     const summary = caption || scopeText || null
     let enrichedText = `${caption} ${scopeText ?? ""}`.trim()
     if (thumbnailUrl) {
@@ -142,10 +132,8 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Embed enriched_text.
     const embedding = await embedText(enrichedText, meter)
 
-    // 5. Entity resolution enriches content but no longer influences labels.
     let entityId: number | null = null
     let resolvedEntity: { name: string; location: string | null } | null = null
     if (summary) {
@@ -182,8 +170,6 @@ export async function POST(req: Request) {
       if (entityImage) thumbnailUrl = entityImage
     }
 
-    // 6. Persist enrichment results. category_id remains untouched so existing
-    // installs retain their legacy assignment while labels drive the product.
     await query(
       `UPDATE posts
        SET summary = $1, enriched_text = $2, embedding = $3::vector, entity_id = $4,

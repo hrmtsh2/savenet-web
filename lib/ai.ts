@@ -5,9 +5,11 @@ import type { Category, EntityEnrichmentData, RecommendationCandidate, MessageRo
 
 // Call Gemini directly with the user's GOOGLE_GENERATIVE_AI_API_KEY (GCP Tier 1
 // prepaid credits) instead of the rate-limited shared AI Gateway.
+// This is a demo. Will soon transition into a Bring Your Own Keys situation, with the user
+// choosing their own models.
 const TEXT_MODEL = google("gemini-2.5-flash")
 const EMBEDDING_MODEL = google.embedding("gemini-embedding-001")
-const EMBEDDING_DIMENSIONS = 768 // must match the posts.embedding vector(768) column
+const EMBEDDING_DIMENSIONS = 768
 
 /**
  * Tracks how many billable model calls a single operation makes, broken down by

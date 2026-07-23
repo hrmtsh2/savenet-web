@@ -3,7 +3,7 @@ import { listConversations } from "@/lib/queries"
 
 // GET /api/conversations — list the user's conversations for history/sidebar.
 export async function GET(req: Request) {
-  const userId = authenticateRequest(req)
+  const userId = await authenticateRequest(req)
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 })
 
   try {

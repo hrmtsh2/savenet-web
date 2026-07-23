@@ -1,19 +1,7 @@
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/auth.config"
-
-function SaveNetLogo() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-      <path d="M6 3 L26 3 Q29 3 29 6 L29 29 L16 21 L3 29 L3 6 Q3 3 6 3 Z" fill="rgba(255,255,255,0.25)" />
-      <path d="M6 3 L26 3 Q29 3 29 6 L29 13 L3 13 L3 6 Q3 3 6 3 Z" fill="rgba(255,255,255,0.45)" />
-      <line x1="23" y1="6" x2="23" y2="12" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="20" y1="9" x2="26" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="21" y1="7" x2="25" y2="11" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="25" y1="7" x2="21" y2="11" stroke="white" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
+import { SaveNetLogo } from "@/components/savenet-logo"
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions)
@@ -43,13 +31,13 @@ export default async function LandingPage() {
                   href="/login"
                   className="text-sm font-medium text-indigo-100 hover:text-white transition-colors"
                 >
-                  Log in
+                  Log In
                 </Link>
                 <Link
                   href="/signup"
                   className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
                 >
-                  Get started
+                  Sign Up
                 </Link>
               </>
             )}
@@ -65,7 +53,7 @@ export default async function LandingPage() {
             <SaveNetLogo />
           </div>
           <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white sm:text-5xl">
-            Your saves,<br />working for you
+            Save smarter,<br /> find faster
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-indigo-200">
             SaveNet captures everything you bookmark on Instagram, X, and your browser, organises it automatically, and lets you have a conversation with your saved content.
@@ -75,7 +63,7 @@ export default async function LandingPage() {
               href="/signup"
               className="rounded-lg bg-white px-6 py-3 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
             >
-              Get started for free
+              Sign Up
             </Link>
             <Link
               href="/login"
@@ -91,24 +79,33 @@ export default async function LandingPage() {
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <h2 className="text-center text-2xl font-semibold tracking-tight">How it works</h2>
-          <p className="mt-2 text-center text-sm text-muted-foreground">Three steps from install to insight</p>
 
           <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-3">
             {[
               {
                 step: "01",
-                title: "Install the extension",
-                description: "Add the SaveNet Chrome extension. It sits quietly in the background — no setup beyond logging in.",
+                title: "Create an Account",
+                description: "Create a free account to start saving your posts with SaveNet."
               },
               {
                 step: "02",
-                title: "Save as you normally would",
-                description: "Save a post on Instagram, bookmark a tweet on X, or add a page to your Reading List. SaveNet captures it automatically.",
+                title: "Install the Extension",
+                description: "Install the browser extension and log in with your SaveNet credentials.",
               },
               {
                 step: "03",
-                title: "Chat with your library",
-                description: "Ask SaveNet anything about your saves. Get recommendations with live prices, menus, and reviews surfaced from the web.",
+                title: "Capture New Saves",
+                description: "Save a post on Instagram, bookmark a tweet on X, or add a page to your Browser Bookmarks/Reading List. SaveNet captures it automatically. However, for saving Instagram posts, we recommend opening the post's main comments thread (by cliking on the comments button) before saving, to capture full post data.",
+              },
+              {
+                step: "04",
+                title: "Import Existing Saves",
+                description: "If you have a pre-existing collection of Instagram Saves, just open the collection page, open the extension popup, and you will see that it recognises your collection. Click Import to import all posts from the open collection into your SaveNet Library."
+              },              
+              {
+                step: "05",
+                title: "Chat",
+                description: "Ask SaveNet anything about your saves. Get recommendations with relevant information (such as prices, menus, and reviews for restaurants), surfaced from the web.",
               },
             ].map((item) => (
               <div key={item.step} className="flex flex-col gap-3">
@@ -125,32 +122,26 @@ export default async function LandingPage() {
       <section className="border-t py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <h2 className="text-center text-2xl font-semibold tracking-tight">Everything in one place</h2>
-          <p className="mt-2 text-center text-sm text-muted-foreground">SaveNet works across the platforms you already use</p>
-
           <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
-                title: "Instagram saves",
+                title: "Instagram Saves",
                 description: "Every post or reel you save on Instagram is captured with its caption, author, and AI-generated summary.",
               },
               {
-                title: "X bookmarks",
+                title: "X (f.k.a. Twitter) Bookmarks",
                 description: "Bookmarked tweets — including links, threads, and media — land in your SaveNet library automatically.",
               },
               {
-                title: "Browser bookmarks",
+                title: "Browser Bookmarks/Reading List Items",
                 description: "Import existing bookmark folders or your Chrome Reading List with a single click from the extension.",
               },
               {
-                title: "Labels you control",
-                description: "SaveNet keeps source and collection labels on every save, while you create any extra labels you want.",
+                title: "AI Chat",
+                description: "Ask questions like 'cheap Thai food in Delhi NCR' or 'what frontend tools have I saved?' and get answers based on your own saves.",
               },
               {
-                title: "AI chat",
-                description: "Ask questions like 'cheap Thai food near me' or 'what frontend tools have I saved?' and get answers grounded in your own content.",
-              },
-              {
-                title: "Live enrichment",
+                title: "Live Enrichment",
                 description: "SaveNet fetches menus, prices, and reviews for restaurants and products you've saved — so you always have the full picture.",
               },
             ].map((feature) => (
@@ -172,13 +163,21 @@ export default async function LandingPage() {
         <div className="mx-auto max-w-xl px-4 sm:px-6">
           <h2 className="text-2xl font-semibold text-white">Ready to save smarter?</h2>
           <p className="mt-3 text-sm leading-relaxed text-indigo-200">
-            Create your free account and install the extension to get started in minutes.
+            Create an account and install the extension to get started
           </p>
           <Link
             href="/signup"
             className="mt-6 inline-block rounded-lg bg-white px-6 py-3 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
           >
             Get started for free
+          </Link>
+          <Link
+              href="https://chromewebstore.google.com/detail/savenet-save-smarter-find/kmbfnbpogmgfmlohnajkpmeicocpedof"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 inline-block rounded-lg bg-white px-6 py-3 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+            >
+            Extension
           </Link>
         </div>
       </section>
@@ -194,13 +193,9 @@ export default async function LandingPage() {
             <Link href="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Privacy policy
             </Link>
-            <a>
-              href="https://chromewebstore.google.com/savenet/`someid`"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              Chrome extension
-            </a>
+            <Link href = "https://github.com/hrmtsh2/savenet-web" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              GitHub
+            </Link>
           </div>
         </div>
       </footer>
