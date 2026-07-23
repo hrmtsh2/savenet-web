@@ -1,33 +1,40 @@
-# savenet-web-43
+# SaveNet
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+[SaveNet](https://savenet.am1.tech) is an AI-powered, searchable library for posts and links a user saves across social media (Instagram and X for now), browser bookmarks, and reading list items. This app stores and enriches the posts collected from the [accompanying extension](https://chromewebstore.google.com/detail/savenet-save-smarter-find/kmbfnbpogmgfmlohnajkpmeicocpedof), then lets the user browse and ask questions about them.
 
-## Built with v0
+## SaveNet Web
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+This repository `savenet-web` contains the Next.js app and its server-side capture, search, chat, and authentication functionality. The companion Chrome extension captures Instagram saves, X bookmarks, browser bookmarks, and Reading List items. The extension lives in the [`savenet-extension`](https://www.github.com/hrmtsh2/savenet-extension) repo.
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_2rUBjTN21XxwDKrDUM27Zx735lwD)
+- accepts authenticated captures from the extension
+- stores posts in Aurora PostgreSQL with pgvector embeddings
+- adds source and collection labels to saved posts
+- enriches captures with OCR, URL extraction, entity resolution, and grounded web results where relevant
+- provides a paginated library, labels view, and cited chat answers
+- authenticates the web app through Amazon Cognito and NextAuth
 
-## Getting Started
+## Stack
 
-First, run the development server:
+- Next.js 16, React 19, TypeScript, Tailwind CSS, and Base UI
+- Amazon Cognito with NextAuth
+- Aurora PostgreSQL, pgvector, and AWS RDS IAM authentication through Vercel OIDC
+- Vercel AI SDK, Google Gemini, and Vercel AI Gateway
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
+## Project structure
+
+```text
+app/
+  api/                 capture and chat routes for the extension
+  actions.ts           session-authenticated server actions
+  library/             paginated library of saved posts
+  chat/                cited chat interface
+  categories/          label management
+components/            application and Base UI components
+lib/
+  ai.ts                Gemini calls and AI utilities
+  auth.ts              NextAuth and extension authentication helpers
+  chat.ts              retrieval and chat orchestration
+  db.ts                Aurora connection pool and RDS IAM signing
+  queries.ts           database queries
+scripts/               manually applied SQL migrations
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
