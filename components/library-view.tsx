@@ -1,12 +1,24 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PostCard } from "@/components/post-card"
 import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
+import { deleteFilteredPosts } from "@/app/actions"
+import { toast } from "sonner"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { CategoryWithCount, PostWithRelations } from "@/lib/types"
@@ -67,6 +79,13 @@ export function LibraryView({
   function toggleLabel(id: number) {
     navigate({ labelIds: selectedLabelIds.includes(id) ? selectedLabelIds.filter((labelId) => labelId !== id) : [...selectedLabelIds, id] })
   }
+
+  const selectedLabels = categories.filter((label) => selectedLabelIds.includes(label.id))
+  const scopeDescription = selectedLabels.length === 0
+    ? "posts"
+    : labelMatch === "all"
+      ? `posts with all of ${selectedLabels.map((label) => label.name).join(", ")} labels`
+      : `posts with any of ${selectedLabels.map((label) => label.name).join(", ")} labels`
 
   return (
     <div className="flex flex-col gap-5">
@@ -136,8 +155,9 @@ export function LibraryView({
         </div>
       )}
 
-      {pageCount > 1 ? (
-        <div className="flex items-center justify-center gap-3">
+      {pageCount > 1 || total > 0 ? (
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {pageCount > 1 ? <>
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => navigate({ page: page - 1 })}>
             <ChevronLeft className="h-4 w-4" /> Previous
           </Button>
@@ -145,9 +165,57 @@ export function LibraryView({
           <Button variant="outline" size="sm" disabled={page === pageCount} onClick={() => navigate({ page: page + 1 })}>
             Next <ChevronRight className="h-4 w-4" />
           </Button>
+          </> : null}
+          {total > 0 ? <DeleteFilteredPostsDialog labelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} scopeDescription={scopeDescription} total={total} /> : null}
         </div>
       ) : null}
     </div>
+  )
+}
+
+function DeleteFilteredPostsDialog({
+  labelIds,
+  labelMatch,
+  searchQuery,
+  scopeDescription,
+  total,
+}: {
+  labelIds: number[]
+  labelMatch: LabelMatch
+  searchQuery?: string
+  scopeDescription: string
+  total: number
+}) {
+  const [open, setOpen] = useState(false)
+  const [pending, startTransition] = useTransition()
+  const scope = `${scopeDescription}${searchQuery ? ` matching “${searchQuery}”` : ""}`
+
+  function deletePosts() {
+    startTransition(async () => {
+      const result = await deleteFilteredPosts({ labelIds, labelMatch, searchQuery })
+      toast.success(`Deleted ${result.deleted} ${result.deleted === 1 ? "post" : "posts"}`)
+      setOpen(false)
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="destructive" size="sm" />}>Delete all {scope}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete all matching posts?</DialogTitle>
+          <DialogDescription>
+            This will permanently remove all {total} {scope} from SaveNet. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+          <Button type="button" variant="destructive" onClick={deletePosts} disabled={pending}>
+            Delete {total} {total === 1 ? "post" : "posts"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -126,3 +126,35 @@ export async function addLabelToFilteredPosts(input: { labelId: number; sourceLa
   revalidatePath("/categories")
   return { ok: true as const, added: result.rows.length }
 }
+
+export async function deleteFilteredPosts(input: { labelIds?: number[]; labelMatch?: LabelMatch; searchQuery?: string }) {
+  const userId = await requireUserId()
+  const labelIds = [...new Set((input.labelIds ?? []).filter((id) => Number.isInteger(id) && id > 0))]
+  const labelMatch = input.labelMatch === "all" ? "all" : "any"
+  const searchQuery = input.searchQuery?.trim().slice(0, 200) || null
+  const labelFilter = labelMatch === "all"
+    ? `(cardinality($2::int[]) = 0 OR p.id IN (
+        SELECT pl.post_id FROM post_labels pl WHERE pl.label_id = ANY($2::int[])
+        GROUP BY pl.post_id HAVING count(DISTINCT pl.label_id) = cardinality($2::int[])
+      ))`
+    : `(cardinality($2::int[]) = 0 OR p.id IN (
+        SELECT pl.post_id FROM post_labels pl WHERE pl.label_id = ANY($2::int[])
+      ))`
+
+  const result = await query(
+    `DELETE FROM posts p
+     WHERE p.user_id = $1
+       AND ${labelFilter}
+       AND ($3::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $3))
+     RETURNING p.id`,
+    [userId, labelIds, searchQuery],
+  )
+  revalidatePath("/library")
+  revalidatePath("/categories")
+  revalidatePath("/chat")
+  return { ok: true as const, deleted: result.rows.length }
+}
