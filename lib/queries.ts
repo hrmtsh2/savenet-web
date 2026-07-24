@@ -41,6 +41,19 @@ export async function attachLabels(postId: number, userId: string, names: Array<
   }
 }
 
+export async function attachExistingLabels(postId: number, userId: string, labelIds: number[]) {
+  const uniqueIds = [...new Set(labelIds.filter((id) => Number.isInteger(id) && id > 0))]
+  if (uniqueIds.length === 0) return
+  await query(
+    `INSERT INTO post_labels (post_id, label_id)
+     SELECT $1, c.id
+     FROM categories c
+     WHERE c.user_id = $2 AND c.id = ANY($3::int[])
+     ON CONFLICT DO NOTHING`,
+    [postId, userId, uniqueIds],
+  )
+}
+
 export function sourceLabelFor(platform: keyof typeof SOURCE_LABELS) {
   return SOURCE_LABELS[platform]
 }
@@ -70,22 +83,27 @@ export async function getCategoriesWithCounts(userId: string): Promise<CategoryW
 
 export type PostSort = "date" | "label"
 
-export async function getPostsCount(userId: string, labelId?: number): Promise<number> {
+export async function getPostsCount(userId: string, labelId?: number, searchQuery?: string): Promise<number> {
   const { rows } = await query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM posts p
      WHERE p.user_id = $1
        AND ($2::int IS NULL OR EXISTS (
          SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
-       ))`,
-    [userId, labelId ?? null],
+       ))
+       AND ($3::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $3))`,
+    [userId, labelId ?? null, searchQuery ?? null],
   )
   return Number(rows[0]?.count ?? "0")
 }
 
 export async function getPostsForUser(
   userId: string,
-  { labelId, limit, offset, sort }: { labelId?: number; limit: number; offset: number; sort: PostSort },
+  { labelId, limit, offset, sort, searchQuery }: { labelId?: number; limit: number; offset: number; sort: PostSort; searchQuery?: string },
 ): Promise<PostWithRelations[]> {
   const orderBy = sort === "label"
     ? "labels.first_label ASC NULLS LAST, p.created_at DESC, p.id DESC"
@@ -113,9 +131,14 @@ export async function getPostsForUser(
        AND ($2::int IS NULL OR EXISTS (
          SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
        ))
+       AND ($3::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $3))
      ORDER BY ${orderBy}
-     LIMIT $3 OFFSET $4`,
-    [userId, labelId ?? null, limit, offset],
+     LIMIT $4 OFFSET $5`,
+    [userId, labelId ?? null, searchQuery ?? null, limit, offset],
   )
   return rows
 }

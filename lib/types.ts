@@ -143,6 +143,7 @@ export interface CapturePayload {
   mediaType?: string
   capturedAt?: string
   sourceUrl?: string
+  labelIds?: number[]
   raw?: {
     permalink?: string
     scopeText?: string

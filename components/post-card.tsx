@@ -18,7 +18,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { deletePost } from "@/app/actions"
-import type { Platform, PostWithRelations } from "@/lib/types"
+import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
+import type { CategoryWithCount, Platform, PostWithRelations } from "@/lib/types"
 
 function XLogo({ className }: { className?: string }) {
   return (
@@ -54,7 +55,7 @@ function platformLabel(platform: Platform) {
   return platform
 }
 
-export function PostCard({ post }: { post: PostWithRelations }) {
+export function PostCard({ post, categories }: { post: PostWithRelations; categories: CategoryWithCount[] }) {
   const caption = post.caption?.trim() || ""
   const summary = post.summary?.trim() || ""
   const [open, setOpen] = useState(false)
@@ -140,39 +141,41 @@ export function PostCard({ post }: { post: PostWithRelations }) {
             View original
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
-
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 px-2 text-muted-foreground hover:text-destructive"
-                  aria-label="Delete post"
-                />
-              }
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this post?</DialogTitle>
-                <DialogDescription>
-                  This saved post will be permanently removed from your library. This cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
-                <form action={onDelete}>
-                  <input type="hidden" name="id" value={post.id} />
-                  <Button type="submit" variant="destructive" disabled={pending}>
-                    Delete post
-                  </Button>
-                </form>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-1">
+            <AddPostsToLabelDialog categories={categories} postIds={[post.id]} count={1} excludedLabelIds={post.labels.map((label) => label.id)} compact />
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 px-2 text-muted-foreground hover:text-destructive"
+                    aria-label="Delete post"
+                  />
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete this post?</DialogTitle>
+                  <DialogDescription>
+                    This saved post will be permanently removed from your library. This cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+                  <form action={onDelete}>
+                    <input type="hidden" name="id" value={post.id} />
+                    <Button type="submit" variant="destructive" disabled={pending}>
+                      Delete post
+                    </Button>
+                  </form>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
     </Card>

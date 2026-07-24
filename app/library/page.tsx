@@ -10,18 +10,19 @@ const savesPaginationPageSize = 24
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ label?: string; page?: string; sort?: string }>
+  searchParams: Promise<{ label?: string; page?: string; q?: string; sort?: string }>
 }) {
   const userId = await requireUserId()
   const params = await searchParams
   const labelId = Number(params.label)
   const selectedLabelId = Number.isInteger(labelId) && labelId > 0 ? labelId : undefined
   const sort: PostSort = params.sort === "label" ? "label" : "date"
+  const searchQuery = params.q?.trim().slice(0, 200) || undefined
   const requestedPage = Number(params.page)
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const [categories, total, allPostsCount] = await Promise.all([
     getCategoriesWithCounts(userId),
-    getPostsCount(userId, selectedLabelId),
+    getPostsCount(userId, selectedLabelId, searchQuery),
     getPostsCount(userId),
   ])
   const pageCount = Math.max(1, Math.ceil(total / savesPaginationPageSize))
@@ -31,6 +32,7 @@ export default async function LibraryPage({
     limit: savesPaginationPageSize,
     offset: (currentPage - 1) * savesPaginationPageSize,
     sort,
+    searchQuery,
   })
   return (
     <div className="min-h-screen">
@@ -53,6 +55,7 @@ export default async function LibraryPage({
           page={currentPage}
           pageCount={pageCount}
           selectedLabelId={selectedLabelId}
+          searchQuery={searchQuery}
           sort={sort}
         />
       </main>

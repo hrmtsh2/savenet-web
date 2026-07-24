@@ -1,6 +1,6 @@
 import { query, toVectorLiteral } from "@/lib/db"
 import { authenticateRequest } from "@/lib/auth"
-import { attachLabels, sourceLabelFor } from "@/lib/queries"
+import { attachExistingLabels, attachLabels, sourceLabelFor } from "@/lib/queries"
 import {
   ocrImage,
   embedText,
@@ -109,6 +109,10 @@ export async function POST(req: Request) {
       { name: sourceLabelFor(body.platform), system: true },
       ...(body.platform === "instagram" && collectionName ? [{ name: collectionName, system: true }] : []),
     ])
+    const labelIds = Array.isArray(body.labelIds)
+      ? body.labelIds.filter((id): id is number => Number.isInteger(id) && id > 0).slice(0, 50)
+      : []
+    await attachExistingLabels(postId, userId, labelIds)
 
     const summary = caption || scopeText || null
     let enrichedText = `${caption} ${scopeText ?? ""}`.trim()

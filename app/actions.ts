@@ -62,3 +62,64 @@ export async function deletePost(formData: FormData) {
   revalidatePath("/chat")
   return { ok: true as const }
 }
+
+export async function addLabelToPosts(input: { labelId: number; postIds: number[] }) {
+  const userId = await requireUserId()
+  const labelId = Number(input.labelId)
+  const postIds = [...new Set(input.postIds.map(Number).filter(Number.isInteger))]
+  if (!Number.isInteger(labelId) || labelId < 1 || postIds.length === 0) return { error: "Choose a label and at least one post." }
+
+  const { rows: labels } = await query<{ id: number }>(
+    "SELECT id FROM categories WHERE id = $1 AND user_id = $2",
+    [labelId, userId],
+  )
+  if (!labels[0]) return { error: "Label not found." }
+
+  const result = await query(
+    `INSERT INTO post_labels (post_id, label_id)
+     SELECT p.id, $2
+     FROM posts p
+     WHERE p.user_id = $1 AND p.id = ANY($3::int[])
+     ON CONFLICT DO NOTHING
+     RETURNING post_id`,
+    [userId, labelId, postIds],
+  )
+  revalidatePath("/library")
+  revalidatePath("/categories")
+  return { ok: true as const, added: result.rows.length }
+}
+
+export async function addLabelToFilteredPosts(input: { labelId: number; sourceLabelId?: number; searchQuery?: string }) {
+  const userId = await requireUserId()
+  const labelId = Number(input.labelId)
+  const sourceLabelId = Number.isInteger(input.sourceLabelId) && Number(input.sourceLabelId) > 0 ? input.sourceLabelId : null
+  const searchQuery = input.searchQuery?.trim().slice(0, 200) || null
+  if (!Number.isInteger(labelId) || labelId < 1) return { error: "Choose a label." }
+
+  const { rows: labels } = await query<{ id: number }>(
+    "SELECT id FROM categories WHERE id = $1 AND user_id = $2",
+    [labelId, userId],
+  )
+  if (!labels[0]) return { error: "Label not found." }
+
+  const result = await query(
+    `INSERT INTO post_labels (post_id, label_id)
+     SELECT p.id, $4
+     FROM posts p
+     WHERE p.user_id = $1
+       AND ($2::int IS NULL OR EXISTS (
+         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
+       ))
+       AND ($3::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $3))
+     ON CONFLICT DO NOTHING
+     RETURNING post_id`,
+    [userId, sourceLabelId, searchQuery, labelId],
+  )
+  revalidatePath("/library")
+  revalidatePath("/categories")
+  return { ok: true as const, added: result.rows.length }
+}
