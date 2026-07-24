@@ -17,4 +17,4 @@ node_modules
 todo.txt
 .env*
 
-todo.txt
+.tsbuildinfo

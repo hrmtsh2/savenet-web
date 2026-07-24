@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import Image from "next/image"
 import { ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
 import { toast } from "sonner"
@@ -55,6 +55,74 @@ function platformLabel(platform: Platform) {
   return platform
 }
 
+function useIsTruncated(content: string) {
+  const ref = useRef<HTMLParagraphElement>(null)
+  const [isTruncated, setIsTruncated] = useState(false)
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const update = () => setIsTruncated(element.scrollHeight > element.clientHeight + 1)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [content])
+
+  return { ref, isTruncated }
+}
+
+function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations; caption: string; summary: string }) {
+  const [open, setOpen] = useState(false)
+  const detailText = summary && summary !== caption ? summary : caption
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<button type="button" className="w-fit text-xs font-medium text-primary hover:underline" />}
+      >
+        More
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto p-0 sm:max-w-xl">
+        {post.thumbnail_url ? (
+          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-muted">
+            <Image
+              src={post.thumbnail_url}
+              alt={caption ? `Thumbnail for: ${caption.slice(0, 80)}` : "Saved post thumbnail"}
+              fill
+              sizes="(max-width: 640px) calc(100vw - 2rem), 576px"
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+        ) : null}
+        <div className="flex flex-col gap-4 p-5">
+          <DialogHeader className="pr-8">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="gap-1.5 font-normal">
+                <PlatformIcon platform={post.platform} className="h-3.5 w-3.5" />
+                {platformLabel(post.platform)}
+              </Badge>
+              {post.author_handle ? <span className="text-xs text-muted-foreground">@{post.author_handle.replace(/^@/, "")}</span> : null}
+            </div>
+            <DialogTitle>{post.author_name || post.author_handle || "Saved post"}</DialogTitle>
+          </DialogHeader>
+          {post.labels.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {post.labels.map((label) => <Badge key={label.id} variant="outline" className="font-normal">{label.name}</Badge>)}
+            </div>
+          ) : null}
+          {caption && summary !== caption ? <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed">{caption}</p> : null}
+          {detailText ? <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{detailText}</p> : null}
+          <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+            View original <ExternalLink className="h-4 w-4" />
+          </a>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function PostCard({ post, categories }: { post: PostWithRelations; categories: CategoryWithCount[] }) {
   const caption = post.caption?.trim() || ""
   const summary = post.summary?.trim() || ""
@@ -62,6 +130,9 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
   const [pending, startTransition] = useTransition()
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(post.thumbnail_url) && !imageFailed
+  const captionClamp = useIsTruncated(caption)
+  const summaryClamp = useIsTruncated(summary)
+  const hasTruncatedDescription = captionClamp.isTruncated || summaryClamp.isTruncated
 
   function onDelete(fd: FormData) {
     startTransition(async () => {
@@ -107,13 +178,15 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
           </div>
         ) : null}
 
-        {caption ? <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">{caption}</p> : null}
+        {caption ? <p ref={captionClamp.ref} className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">{caption}</p> : null}
 
         {summary ? (
-          <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{summary}</p>
+          <p ref={summaryClamp.ref} className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{summary}</p>
         ) : (
           !caption && <p className="text-sm italic text-muted-foreground">No description yet.</p>
         )}
+
+        {hasTruncatedDescription ? <PostDetailsDialog post={post} caption={caption} summary={summary} /> : null}
 
         {post.entity_name ? (
           <div className="flex items-center gap-1.5 text-xs text-foreground">
