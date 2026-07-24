@@ -16,12 +16,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { CategoryWithCount } from "@/lib/types"
+import type { CategoryWithCount, LabelMatch } from "@/lib/types"
 
 type Props = {
   categories: CategoryWithCount[]
   postIds?: number[]
-  sourceLabelId?: number
+  sourceLabelIds?: number[]
+  labelMatch?: LabelMatch
   searchQuery?: string
   count: number
   excludedLabelIds?: number[]
@@ -31,7 +32,8 @@ type Props = {
 export function AddPostsToLabelDialog({
   categories,
   postIds,
-  sourceLabelId,
+  sourceLabelIds,
+  labelMatch,
   searchQuery,
   count,
   excludedLabelIds = [],
@@ -48,7 +50,7 @@ export function AddPostsToLabelDialog({
     startTransition(async () => {
       const result = isSinglePost
         ? await addLabelToPosts({ labelId: Number(labelId), postIds: postIds || [] })
-        : await addLabelToFilteredPosts({ labelId: Number(labelId), sourceLabelId, searchQuery })
+        : await addLabelToFilteredPosts({ labelId: Number(labelId), sourceLabelIds, labelMatch, searchQuery })
       if (result.error) {
         toast.error(result.error)
         return

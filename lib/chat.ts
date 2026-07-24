@@ -16,12 +16,13 @@ import {
   createCallMeter,
   totalCalls,
 } from "./ai"
-import type { ReferencedPost, RecommendationCandidate } from "./types"
+import type { LabelMatch, ReferencedPost, RecommendationCandidate } from "./types"
 
 export interface ChatTurnInput {
   conversationId?: number | null
   categoryId?: number | null
   categoryIds?: number[] | null
+  labelMatch?: LabelMatch
   message: string
 }
 
@@ -45,6 +46,8 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
   if (!message) throw new ChatError("message is required", 400)
 
   const meter = createCallMeter()
+  const requestedLabelIds = [...new Set((input.categoryIds ?? []).filter((id) => Number.isInteger(id) && id > 0))]
+  const requestedLabelMatch: LabelMatch = input.labelMatch === "all" ? "all" : "any"
   let conversation = null
   if (input.conversationId != null) {
     conversation = await getConversation(userId, input.conversationId)
@@ -54,10 +57,11 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
       throw new ChatError("categoryId is required to start a conversation", 400)
     }
     const categories = await getCategories(userId)
-    if (!categories.some((c) => c.id === input.categoryId)) {
+    const labelIds = requestedLabelIds.length ? requestedLabelIds : [input.categoryId]
+    if (!labelIds.every((id) => categories.some((category) => category.id === id))) {
       throw new ChatError("Category not found", 404)
     }
-    conversation = await createConversation(userId, input.categoryId, deriveConversationTitle(message))
+    conversation = await createConversation(userId, input.categoryId, deriveConversationTitle(message), labelIds, requestedLabelMatch)
   }
 
   if (conversation.category_id == null) {
@@ -65,14 +69,18 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
   }
   const categoryId = conversation.category_id
   const categories = await getCategories(userId)
-  const categoryName = categories.find((c) => c.id === categoryId)?.name ?? "Saved posts"
+  const searchCategoryIds = conversation.label_ids?.length ? conversation.label_ids : [categoryId]
+  const searchLabelMatch: LabelMatch = conversation.label_match === "all" ? "all" : "any"
+  const categoryName = categories
+    .filter((category) => searchCategoryIds.includes(category.id))
+    .map((category) => category.name)
+    .join(", ") || "Saved posts"
 
   const history = await getMessages(conversation.id)
   await addMessage(conversation.id, "user", message)
 
   const queryEmbedding = await embedText(message, meter)
-  const searchCategoryIds = input.categoryIds?.length ? input.categoryIds : [categoryId]
-  const candidates = await searchSimilarPosts(userId, searchCategoryIds, queryEmbedding, 8)
+  const candidates = await searchSimilarPosts(userId, searchCategoryIds, searchLabelMatch, queryEmbedding, 8)
 
   const seenEntities = new Map<number, RecommendationCandidate["enrichment"]>()
   for (const c of candidates) {

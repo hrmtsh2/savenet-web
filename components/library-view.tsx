@@ -10,7 +10,7 @@ import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { CategoryWithCount, PostWithRelations } from "@/lib/types"
-import type { PostSort } from "@/lib/queries"
+import type { LabelMatch, PostSort } from "@/lib/queries"
 
 interface Props {
   categories: CategoryWithCount[]
@@ -19,7 +19,8 @@ interface Props {
   allPostsCount: number
   page: number
   pageCount: number
-  selectedLabelId?: number
+  selectedLabelIds: number[]
+  labelMatch: LabelMatch
   searchQuery?: string
   sort: PostSort
 }
@@ -31,22 +32,27 @@ export function LibraryView({
   allPostsCount,
   page,
   pageCount,
-  selectedLabelId,
+  selectedLabelIds,
+  labelMatch,
   searchQuery,
   sort,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const navigate = useCallback((changes: { label?: number; page?: number; query?: string; sort?: PostSort }) => {
+  const navigate = useCallback((changes: { labelIds?: number[]; labelMatch?: LabelMatch; page?: number; query?: string; sort?: PostSort }) => {
     const params = new URLSearchParams(searchParams.toString())
-    const label = changes.label === undefined ? selectedLabelId : changes.label
+    const labelIds = changes.labelIds ?? selectedLabelIds
+    const nextLabelMatch = changes.labelMatch ?? labelMatch
     const nextQuery = changes.query === undefined ? searchQuery : changes.query.trim()
     const nextSort = changes.sort ?? sort
     const nextPage = changes.page ?? 1
 
-    if (label) params.set("label", String(label))
-    else params.delete("label")
+    if (labelIds.length) params.set("labels", labelIds.join(","))
+    else params.delete("labels")
+    params.delete("label")
+    if (nextLabelMatch === "all" && labelIds.length > 1) params.set("match", "all")
+    else params.delete("match")
     if (nextQuery) params.set("q", nextQuery)
     else params.delete("q")
     if (nextSort === "label") params.set("sort", nextSort)
@@ -56,7 +62,11 @@ export function LibraryView({
 
     const query = params.toString()
     router.push(query ? `/library?${query}` : "/library")
-  }, [searchParams, selectedLabelId, searchQuery, sort, router])
+  }, [searchParams, selectedLabelIds, labelMatch, searchQuery, sort, router])
+
+  function toggleLabel(id: number) {
+    navigate({ labelIds: selectedLabelIds.includes(id) ? selectedLabelIds.filter((labelId) => labelId !== id) : [...selectedLabelIds, id] })
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -82,19 +92,28 @@ export function LibraryView({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
-          <LabelButton active={!selectedLabelId} onClick={() => navigate({ label: 0 })} label="All posts" count={allPostsCount} />
+          <LabelButton active={selectedLabelIds.length === 0} onClick={() => navigate({ labelIds: [] })} label="All posts" count={allPostsCount} />
           {categories.map((label) => (
             <LabelButton
               key={label.id}
-              active={selectedLabelId === label.id}
-              onClick={() => navigate({ label: label.id })}
+              active={selectedLabelIds.includes(label.id)}
+              onClick={() => toggleLabel(label.id)}
               label={label.name}
               count={label.post_count}
             />
           ))}
         </div>
         <div className="flex gap-2">
-          {total > 0 ? <AddPostsToLabelDialog categories={categories} sourceLabelId={selectedLabelId} searchQuery={searchQuery} count={total} /> : null}
+          {selectedLabelIds.length > 1 ? (
+            <Select value={labelMatch} onValueChange={(value) => navigate({ labelMatch: value as LabelMatch })}>
+              <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">Any label</SelectItem>
+                <SelectItem value="all">All labels</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
+          {total > 0 ? <AddPostsToLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} /> : null}
           <Select value={sort} onValueChange={(value) => navigate({ sort: value as PostSort })}>
             <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>

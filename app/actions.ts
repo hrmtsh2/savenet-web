@@ -5,11 +5,13 @@ import { query } from "@/lib/db"
 import { requireUserId } from "@/lib/auth"
 import { getConversation, getMessages, getPostsByIds } from "@/lib/queries"
 import { runChatTurn, ChatError, type ChatTurnResult } from "@/lib/chat"
+import type { LabelMatch } from "@/lib/types"
 
 export async function sendChatMessage(input: {
   conversationId?: number | null
   categoryId?: number | null
   categoryIds: number[] | null
+  labelMatch?: LabelMatch
   message: string
 }): Promise<{ ok: true; result: ChatTurnResult } | { ok: false; error: string }> {
   try {
@@ -89,10 +91,11 @@ export async function addLabelToPosts(input: { labelId: number; postIds: number[
   return { ok: true as const, added: result.rows.length }
 }
 
-export async function addLabelToFilteredPosts(input: { labelId: number; sourceLabelId?: number; searchQuery?: string }) {
+export async function addLabelToFilteredPosts(input: { labelId: number; sourceLabelIds?: number[]; labelMatch?: LabelMatch; searchQuery?: string }) {
   const userId = await requireUserId()
   const labelId = Number(input.labelId)
-  const sourceLabelId = Number.isInteger(input.sourceLabelId) && Number(input.sourceLabelId) > 0 ? input.sourceLabelId : null
+  const sourceLabelIds = [...new Set((input.sourceLabelIds ?? []).filter((id) => Number.isInteger(id) && id > 0))]
+  const labelMatch = input.labelMatch === "all" ? "all" : "any"
   const searchQuery = input.searchQuery?.trim().slice(0, 200) || null
   if (!Number.isInteger(labelId) || labelId < 1) return { error: "Choose a label." }
 
@@ -107,9 +110,9 @@ export async function addLabelToFilteredPosts(input: { labelId: number; sourceLa
      SELECT p.id, $4
      FROM posts p
      WHERE p.user_id = $1
-       AND ($2::int IS NULL OR EXISTS (
-         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
-       ))
+       AND ${labelMatch === "all"
+         ? `(cardinality($2::int[]) = 0 OR (SELECT count(DISTINCT pl.label_id) FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($2::int[])) = cardinality($2::int[]))`
+         : `(cardinality($2::int[]) = 0 OR EXISTS (SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($2::int[])))`}
        AND ($3::text IS NULL OR to_tsvector('simple',
          coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
          coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
@@ -117,7 +120,7 @@ export async function addLabelToFilteredPosts(input: { labelId: number; sourceLa
        ) @@ websearch_to_tsquery('simple', $3))
      ON CONFLICT DO NOTHING
      RETURNING post_id`,
-    [userId, sourceLabelId, searchQuery, labelId],
+    [userId, sourceLabelIds, searchQuery, labelId],
   )
   revalidatePath("/library")
   revalidatePath("/categories")

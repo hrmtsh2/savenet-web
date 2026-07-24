@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { sendChatMessage, loadConversation } from "@/app/actions"
 import { ReferencedPostCard } from "@/components/referenced-post-card"
-import type { CategoryWithCount, ConversationListItem, ReferencedPost } from "@/lib/types"
+import type { CategoryWithCount, ConversationListItem, LabelMatch, ReferencedPost } from "@/lib/types"
 
 interface UiMessage {
   role: "user" | "assistant"
@@ -29,6 +29,7 @@ export function ChatView({
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations)
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [categoryIds, setCategoryIds] = useState<number[] | null>(null)
+  const [labelMatch, setLabelMatch] = useState<LabelMatch>("any")
   const [messages, setMessages] = useState<UiMessage[]>([])
   const [input, setInput] = useState("")
   const [sending, startSending] = useTransition()
@@ -46,12 +47,14 @@ export function ChatView({
   function startNewChat() {
     setConversationId(null)
     setCategoryIds(null)
+    setLabelMatch("any")
     setMessages([])
     setInput("")
   }
 
-  function pickCategories(ids: number[]) {
+  function pickCategories(ids: number[], match: LabelMatch) {
     setCategoryIds(ids)
+    setLabelMatch(match)
     setConversationId(null)
     setMessages([])
   }
@@ -72,10 +75,8 @@ export function ChatView({
           .filter(Boolean) as ReferencedPost[],
       }))
       setConversationId(res.conversation.id)
-      // restore category selection from resumed conversation
-      if (res.conversation.category_id != null) {
-        setCategoryIds([res.conversation.category_id])
-      }
+      setCategoryIds(res.conversation.label_ids.length ? res.conversation.label_ids : res.conversation.category_id != null ? [res.conversation.category_id] : null)
+      setLabelMatch(res.conversation.label_match)
       setMessages(uiMessages)
     })
   }
@@ -100,6 +101,7 @@ export function ChatView({
         conversationId,
         categoryId: primaryCategoryId,
         categoryIds,
+        labelMatch,
         message: text,
       })
       if (!res.ok) {
@@ -124,6 +126,8 @@ export function ChatView({
             id: result.conversationId,
             title: text.length <= 60 ? text : text.slice(0, 57) + "…",
             category_id: primaryCategoryId,
+            label_ids: categoryIds,
+            label_match: labelMatch,
             category_name: cat?.name ?? null,
             created_at: new Date().toISOString(),
           },
@@ -196,6 +200,7 @@ export function ChatView({
                   {c.name}
                 </Badge>
               ))}
+              {activeCategories.length > 1 ? <Badge variant="outline">{labelMatch === "all" ? "All labels" : "Any label"}</Badge> : null}
             </div>
 
             <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
@@ -255,9 +260,10 @@ function CategoryPicker({
   onPick,
 }: {
   categories: CategoryWithCount[]
-  onPick: (ids: number[]) => void
+  onPick: (ids: number[], match: LabelMatch) => void
 }) {
   const [selected, setSelected] = useState<number[]>([])
+  const [labelMatch, setLabelMatch] = useState<LabelMatch>("any")
 
   function toggle(id: number) {
     setSelected((prev) =>
@@ -311,8 +317,15 @@ function CategoryPicker({
           })}
         </div>
 
+        {selected.length > 1 ? (
+          <div className="flex rounded-lg border border-border p-1 text-sm">
+            <button onClick={() => setLabelMatch("any")} className={cn("rounded-md px-3 py-1.5", labelMatch === "any" && "bg-secondary font-medium")}>Any label</button>
+            <button onClick={() => setLabelMatch("all")} className={cn("rounded-md px-3 py-1.5", labelMatch === "all" && "bg-secondary font-medium")}>All labels</button>
+          </div>
+        ) : null}
+
         <Button
-          onClick={() => { if (selected.length > 0) onPick(selected) }}
+          onClick={() => { if (selected.length > 0) onPick(selected, labelMatch) }}
           disabled={selected.length === 0}
           className="px-8 sticky bottom-4"
         >

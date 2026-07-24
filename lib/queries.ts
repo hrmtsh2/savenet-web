@@ -8,6 +8,7 @@ import type {
   Message,
   RecommendationCandidate,
   EntityEnrichmentData,
+  LabelMatch,
 } from "./types"
 
 const SOURCE_LABELS = {
@@ -82,28 +83,42 @@ export async function getCategoriesWithCounts(userId: string): Promise<CategoryW
 }
 
 export type PostSort = "date" | "label"
+export type { LabelMatch } from "./types"
 
-export async function getPostsCount(userId: string, labelId?: number, searchQuery?: string): Promise<number> {
+function labelFilterSql(labelMatch: LabelMatch, labelParam: string) {
+  if (labelMatch === "all") {
+    return `(cardinality(${labelParam}::int[]) = 0 OR p.id IN (
+      SELECT pl.post_id
+      FROM post_labels pl
+      WHERE pl.label_id = ANY(${labelParam}::int[])
+      GROUP BY pl.post_id
+      HAVING count(DISTINCT pl.label_id) = cardinality(${labelParam}::int[])
+    ))`
+  }
+  return `(cardinality(${labelParam}::int[]) = 0 OR p.id IN (
+    SELECT pl.post_id FROM post_labels pl WHERE pl.label_id = ANY(${labelParam}::int[])
+  ))`
+}
+
+export async function getPostsCount(userId: string, labelIds: number[] = [], labelMatch: LabelMatch = "any", searchQuery?: string): Promise<number> {
   const { rows } = await query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM posts p
      WHERE p.user_id = $1
-       AND ($2::int IS NULL OR EXISTS (
-         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
-       ))
+       AND ${labelFilterSql(labelMatch, "$2")}
        AND ($3::text IS NULL OR to_tsvector('simple',
          coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
          coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
          coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
        ) @@ websearch_to_tsquery('simple', $3))`,
-    [userId, labelId ?? null, searchQuery ?? null],
+    [userId, labelIds, searchQuery ?? null],
   )
   return Number(rows[0]?.count ?? "0")
 }
 
 export async function getPostsForUser(
   userId: string,
-  { labelId, limit, offset, sort, searchQuery }: { labelId?: number; limit: number; offset: number; sort: PostSort; searchQuery?: string },
+  { labelIds = [], labelMatch = "any", limit, offset, sort, searchQuery }: { labelIds?: number[]; labelMatch?: LabelMatch; limit: number; offset: number; sort: PostSort; searchQuery?: string },
 ): Promise<PostWithRelations[]> {
   const orderBy = sort === "label"
     ? "labels.first_label ASC NULLS LAST, p.created_at DESC, p.id DESC"
@@ -128,9 +143,7 @@ export async function getPostsForUser(
      ) labels ON true
      LEFT JOIN entities e ON e.id = p.entity_id
      WHERE p.user_id = $1
-       AND ($2::int IS NULL OR EXISTS (
-         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = $2
-       ))
+       AND ${labelFilterSql(labelMatch, "$2")}
        AND ($3::text IS NULL OR to_tsvector('simple',
          coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
          coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
@@ -138,7 +151,7 @@ export async function getPostsForUser(
        ) @@ websearch_to_tsquery('simple', $3))
      ORDER BY ${orderBy}
      LIMIT $4 OFFSET $5`,
-    [userId, labelId ?? null, searchQuery ?? null, limit, offset],
+    [userId, labelIds, searchQuery ?? null, limit, offset],
   )
   return rows
 }
@@ -151,12 +164,14 @@ export async function createConversation(
   userId: string,
   categoryId: number,
   title: string | null,
+  labelIds: number[] = [categoryId],
+  labelMatch: LabelMatch = "any",
 ): Promise<Conversation> {
   const { rows } = await query<Conversation>(
-    `INSERT INTO conversations (user_id, category_id, title)
-     VALUES ($1, $2, $3)
-     RETURNING id, user_id, category_id, title, created_at`,
-    [userId, categoryId, title],
+    `INSERT INTO conversations (user_id, category_id, title, label_ids, label_match)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, user_id, category_id, label_ids, label_match, title, created_at`,
+    [userId, categoryId, title, labelIds, labelMatch],
   )
   return rows[0]
 }
@@ -164,7 +179,7 @@ export async function createConversation(
 /** Fetch a conversation scoped to its owner, or null. */
 export async function getConversation(userId: string, conversationId: number): Promise<Conversation | null> {
   const { rows } = await query<Conversation>(
-    `SELECT id, user_id, category_id, title, created_at
+    `SELECT id, user_id, category_id, label_ids, label_match, title, created_at
      FROM conversations WHERE id = $1 AND user_id = $2`,
     [conversationId, userId],
   )
@@ -173,7 +188,7 @@ export async function getConversation(userId: string, conversationId: number): P
 
 export async function listConversations(userId: string): Promise<ConversationListItem[]> {
   const { rows } = await query<ConversationListItem>(
-    `SELECT conv.id, conv.title, conv.category_id, c.name AS category_name, conv.created_at
+    `SELECT conv.id, conv.title, conv.category_id, conv.label_ids, conv.label_match, c.name AS category_name, conv.created_at
      FROM conversations conv
      LEFT JOIN categories c ON c.id = conv.category_id
      WHERE conv.user_id = $1
@@ -216,6 +231,7 @@ export async function addMessage(
 export async function searchSimilarPosts(
   userId: string,
   categoryIds: number[],
+  labelMatch: LabelMatch,
   embedding: number[],
   limit = 8,
 ): Promise<RecommendationCandidate[]> {
@@ -227,9 +243,7 @@ export async function searchSimilarPosts(
      LEFT JOIN entities e ON e.id = p.entity_id
      WHERE p.user_id = $1
        AND p.embedding IS NOT NULL
-       AND EXISTS (
-         SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($2::int[])
-       )
+       AND ${labelFilterSql(labelMatch, "$2")}
      ORDER BY p.embedding <=> $3::vector
      LIMIT $4`,
     [userId, categoryIds, toVectorLiteral(embedding), limit],

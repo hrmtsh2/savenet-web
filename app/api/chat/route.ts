@@ -4,6 +4,8 @@ import { runChatTurn, ChatError } from "@/lib/chat"
 interface ChatBody {
   conversationId?: number | null
   categoryId?: number | null
+  categoryIds?: number[] | null
+  labelMatch?: "any" | "all"
   message?: string
 }
 
@@ -22,6 +24,8 @@ export async function POST(req: Request) {
     const result = await runChatTurn(userId, {
       conversationId: body.conversationId,
       categoryId: body.categoryId,
+      categoryIds: body.categoryIds,
+      labelMatch: body.labelMatch,
       message: body.message ?? "",
     })
     return Response.json(result)

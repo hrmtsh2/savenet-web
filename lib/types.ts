@@ -76,6 +76,8 @@ export interface Conversation {
   id: number
   user_id: string
   category_id: number | null
+  label_ids: number[]
+  label_match: LabelMatch
   title: string | null
   created_at: string
 }
@@ -84,9 +86,13 @@ export interface ConversationListItem {
   id: number
   title: string | null
   category_id: number | null
+  label_ids: number[]
+  label_match: LabelMatch
   category_name: string | null
   created_at: string
 }
+
+export type LabelMatch = "any" | "all"
 
 export interface Message {
   id: number

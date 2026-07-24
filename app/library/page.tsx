@@ -1,7 +1,7 @@
 import { SiteNav } from "@/components/site-nav"
 import { LibraryView } from "@/components/library-view"
 import { requireUserId } from "@/lib/auth"
-import { getCategoriesWithCounts, getPostsCount, getPostsForUser, type PostSort } from "@/lib/queries"
+import { getCategoriesWithCounts, getPostsCount, getPostsForUser, type LabelMatch, type PostSort } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
@@ -10,25 +10,26 @@ const savesPaginationPageSize = 24
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ label?: string; page?: string; q?: string; sort?: string }>
+  searchParams: Promise<{ label?: string; labels?: string; match?: string; page?: string; q?: string; sort?: string }>
 }) {
   const userId = await requireUserId()
   const params = await searchParams
-  const labelId = Number(params.label)
-  const selectedLabelId = Number.isInteger(labelId) && labelId > 0 ? labelId : undefined
+  const selectedLabelIds = [...new Set((params.labels ?? params.label ?? "").split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+  const labelMatch: LabelMatch = params.match === "all" ? "all" : "any"
   const sort: PostSort = params.sort === "label" ? "label" : "date"
   const searchQuery = params.q?.trim().slice(0, 200) || undefined
   const requestedPage = Number(params.page)
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const [categories, total, allPostsCount] = await Promise.all([
     getCategoriesWithCounts(userId),
-    getPostsCount(userId, selectedLabelId, searchQuery),
+    getPostsCount(userId, selectedLabelIds, labelMatch, searchQuery),
     getPostsCount(userId),
   ])
   const pageCount = Math.max(1, Math.ceil(total / savesPaginationPageSize))
   const currentPage = Math.min(page, pageCount)
   const posts = await getPostsForUser(userId, {
-    labelId: selectedLabelId,
+    labelIds: selectedLabelIds,
+    labelMatch,
     limit: savesPaginationPageSize,
     offset: (currentPage - 1) * savesPaginationPageSize,
     sort,
@@ -54,7 +55,8 @@ export default async function LibraryPage({
           allPostsCount={allPostsCount}
           page={currentPage}
           pageCount={pageCount}
-          selectedLabelId={selectedLabelId}
+          selectedLabelIds={selectedLabelIds}
+          labelMatch={labelMatch}
           searchQuery={searchQuery}
           sort={sort}
         />
