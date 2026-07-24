@@ -54,6 +54,29 @@ export async function createCategory(formData: FormData) {
   return { ok: true as const }
 }
 
+export async function deleteCategory(labelId: number) {
+  const userId = await requireUserId()
+  if (!Number.isInteger(labelId) || labelId < 1) return { error: "Invalid label." }
+
+  const { rows } = await query<{ id: number }>(
+    `WITH removed_assignments AS (
+       DELETE FROM post_labels pl
+       USING categories c
+       WHERE pl.label_id = c.id AND c.id = $1 AND c.user_id = $2
+     )
+     DELETE FROM categories
+     WHERE id = $1 AND user_id = $2
+     RETURNING id`,
+    [labelId, userId],
+  )
+  if (!rows[0]) return { error: "Label not found." }
+
+  revalidatePath("/categories")
+  revalidatePath("/library")
+  revalidatePath("/chat")
+  return { ok: true as const }
+}
+
 export async function deletePost(formData: FormData) {
   const userId = await requireUserId()
   const id = Number(formData.get("id"))
