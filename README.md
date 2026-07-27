@@ -9,16 +9,45 @@ This repository `savenet-web` contains the Next.js app and its server-side captu
 - accepts authenticated captures from the extension
 - stores posts in Aurora PostgreSQL with pgvector embeddings
 - adds source and collection labels to saved posts
-- enriches captures with OCR, URL extraction, entity resolution, and grounded web results where relevant
-- provides a paginated library, labels view, and cited chat answers
+- uses OCR and captured context to make image-based posts searchable
+- provides a paginated library, label management, keyword search, and chat answers that link back to saved posts
+- lets users keep Gemini 2.5 Flash as the default model or bring an OpenRouter API key and model of their choice
+- runs label-specific entity agents, view-wide auto-labelling, and optional email digests
 - authenticates the web app through Amazon Cognito and NextAuth
+
+User-provided model keys are encrypted before storage.
+The asynchronous agent and digest worker is defined separately in [`savenet-infra`](https://www.github.com/hrmtsh2/savenet-infra).
+It uses EventBridge, SQS, Lambda, and AWS Secrets Manager to call this app's workers, through protected routes.
 
 ## Stack
 
 - Next.js 16, React 19, TypeScript, Tailwind CSS, and Base UI
 - Amazon Cognito with NextAuth
 - Aurora PostgreSQL, pgvector, and AWS RDS IAM authentication through Vercel OIDC
-- Vercel AI SDK, Google Gemini, and Vercel AI Gateway
+- Vercel AI SDK, Google Gemini, and OpenRouter
+- Amazon SES for email delivery
+- EventBridge, SQS, and Lambda for scheduled background work
+
+## Architecture
+
+```mermaid
+flowchart LR
+  extension[Chrome extension] -->|authenticated captures| app[SaveNet web app]
+  user[User] -->|library, chat, settings| app
+
+  app --> database[(Aurora PostgreSQL + pgvector)]
+  app --> gemini[Gemini 2.5 Flash]
+  app -->|optional encrypted OpenRouter key| openrouter[OpenRouter model]
+
+  eventbridge[EventBridge] --> queue[SQS]
+  queue --> worker[Lambda worker]
+  worker -->|protected worker routes| app
+  worker --> secrets[AWS Secrets Manager]
+  app --> ses[Amazon SES]
+```
+
+The web app owns capture, retrieval, model settings, and agent state.
+The worker only schedules and invokes protected routes, so the same app can move away from Vercel without changing the background-job design.
 
 ## Project structure
 
@@ -29,12 +58,17 @@ app/
   library/             paginated library of saved posts
   chat/                cited chat interface
   categories/          label management
+  settings/            model, agent, and digest settings
 components/            application and Base UI components
 lib/
-  ai.ts                Gemini calls and AI utilities
+  agents.ts            entity-resolution and auto-labelling runs
+  ai.ts                capture and chat AI utilities
+  ai-credentials.ts    encrypted OpenRouter credentials
+  ai-settings.ts       model preferences and AI usage records
   auth.ts              NextAuth and extension authentication helpers
   chat.ts              retrieval and chat orchestration
   db.ts                Aurora connection pool and RDS IAM signing
+  digests.ts           digest generation and scheduling checks
   queries.ts           database queries
 scripts/               manually applied SQL migrations
 ```

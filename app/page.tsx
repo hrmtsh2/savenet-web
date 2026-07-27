@@ -56,7 +56,7 @@ export default async function LandingPage() {
             Save smarter,<br /> find faster
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-indigo-200">
-            SaveNet captures everything you bookmark on Instagram, X, and your browser, organises it automatically, and lets you have a conversation with your saved content.
+            SaveNet captures what you save on Instagram, X, and your browser, keeps it searchable, and lets you ask useful questions about it later.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
@@ -105,7 +105,7 @@ export default async function LandingPage() {
               {
                 step: "05",
                 title: "Chat",
-                description: "Ask SaveNet anything about your saves. Get recommendations with relevant information (such as prices, menus, and reviews for restaurants), surfaced from the web.",
+                description: "Ask SaveNet about your saves, or set up agents to organise a view, extract useful details, and send a personal digest.",
               },
             ].map((item) => (
               <div key={item.step} className="flex flex-col gap-3">
@@ -126,7 +126,7 @@ export default async function LandingPage() {
             {[
               {
                 title: "Instagram Saves",
-                description: "Every post or reel you save on Instagram is captured with its caption, author, and AI-generated summary.",
+                description: "Every post or reel you save on Instagram is captured with its caption, author, and searchable context.",
               },
               {
                 title: "X (f.k.a. Twitter) Bookmarks",
@@ -141,8 +141,16 @@ export default async function LandingPage() {
                 description: "Ask questions like 'cheap Thai food in Delhi NCR' or 'what frontend tools have I saved?' and get answers based on your own saves.",
               },
               {
-                title: "Live Enrichment",
-                description: "SaveNet fetches menus, prices, and reviews for restaurants and products you've saved — so you always have the full picture.",
+                title: "Model Choice",
+                description: "Use the default Gemini 2.5 Flash model, or connect an OpenRouter key and choose the model you prefer.",
+              },
+              {
+                title: "Personal Agents",
+                description: "Run an agent over a label to extract the details you care about, or sort the current library view into new labels.",
+              },
+              {
+                title: "Personal Digests",
+                description: "Set the tone and scope once, then receive a weekly email built from your saves. E.g. something new to do/somewhere new to go every weekend!",
               },
             ].map((feature) => (
               <div
