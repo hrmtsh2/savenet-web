@@ -50,7 +50,9 @@ export async function saveChatModelPreference(input: {
   const userId = await requireUserId()
   const modelId = input.modelId.trim()
   if (input.credentialSource !== "platform" && input.credentialSource !== "byok") return { error: "Invalid credential source." }
-  if (!modelId || modelId.length > 160 || !/^[a-zA-Z0-9._:/-]+$/.test(modelId)) return { error: "Enter a valid model ID." }
+  if (input.credentialSource === "byok" && (!modelId || modelId.length > 160 || !/^[a-zA-Z0-9._:/-]+$/.test(modelId))) {
+    return { error: "Enter a valid model ID." }
+  }
   const provider = input.credentialSource === "platform" ? "google" : "openrouter"
   const selectedModelId = input.credentialSource === "platform" ? "gemini-2.5-flash" : modelId
 
