@@ -5,12 +5,9 @@ import {
   getMessages,
   addMessage,
   searchSimilarPosts,
-  getFreshEnrichment,
-  saveEnrichment,
 } from "./queries"
 import {
   embedText,
-  enrichEntityWeb,
   synthesizeRecommendation,
   deriveConversationTitle,
   createCallMeter,
@@ -82,24 +79,9 @@ export async function runChatTurn(userId: string, input: ChatTurnInput): Promise
   const queryEmbedding = await embedText(message, meter)
   const candidates = await searchSimilarPosts(userId, searchCategoryIds, searchLabelMatch, queryEmbedding, 8)
 
-  const seenEntities = new Map<number, RecommendationCandidate["enrichment"]>()
-  for (const c of candidates) {
-    if (c.entity_id == null || !c.entity_name) continue
-    if (seenEntities.has(c.entity_id)) {
-      c.enrichment = seenEntities.get(c.entity_id)
-      continue
-    }
-    let data = await getFreshEnrichment(c.entity_id, 21)
-    if (!data) {
-      data = await enrichEntityWeb(c.entity_name, c.entity_location, meter)
-      await saveEnrichment(c.entity_id, data)
-    }
-    c.enrichment = data
-    seenEntities.set(c.entity_id, data)
-  }
-
   const { reply, citedPostIds } = await synthesizeRecommendation(
     {
+      userId,
       history: history.map((m) => ({ role: m.role, content: m.content })),
       candidates,
       userMessage: message,

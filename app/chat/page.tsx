@@ -19,7 +19,7 @@ export default async function ChatPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-balance">Ask your library</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ask AI about your posts and get responses based on the raw post data, as well as the enrichment that occured when the post was saved. This helps give you valid and updated answers.
+            Ask AI about your saved posts. Answers are based on your library of captured content.
           </p>
         </div>
 

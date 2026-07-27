@@ -25,7 +25,7 @@ export interface FurtherReadingItem {
   title: string | null
   snippet: string | null
   extractedData: Record<string, string | null> | null
-  // e.g. { price: "₹450", availability: "In stock", menuHighlights: "Biryani, Kebab" }
+  // e.g. { price: "₹450", menuHighlights: "Biryani, Kebab" }
 }
 
 export interface Post {
@@ -112,15 +112,7 @@ export interface ReferencedPost {
   platform: Platform
 }
 
-// Cached web-search enrichment payload for an entity
-export interface EntityEnrichmentData {
-  priceRange: string | null
-  mustTry: string | null
-  sentiment: string | null
-  notes: string | null
-}
-
-// A candidate post pulled from the vector search, with optional enrichment
+// A candidate post pulled from the vector search
 export interface RecommendationCandidate {
   id: number
   post_url: string
@@ -134,7 +126,6 @@ export interface RecommendationCandidate {
   entity_name: string | null
   entity_location: string | null
   distance: number
-  enrichment?: EntityEnrichmentData | null
 }
 
 // Shape of the capture endpoint request body
@@ -154,11 +145,6 @@ export interface CapturePayload {
     permalink?: string
     scopeText?: string
     tweetTimestamp?: string
-    /**
-     * Optional list of image URLs scraped from the post DOM. When thumbnailUrl
-     * is not provided (common for Instagram), the server asks Gemini to pick the
-     * best main thumbnail from these candidates at ingest time.
-     */
     candidateImages?: string[]
     [key: string]: unknown
   }

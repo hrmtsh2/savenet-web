@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Library, FolderCog, MessagesSquare, LogOut } from "lucide-react"
+import { Library, FolderCog, MessagesSquare, Settings, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { SaveNetLogo } from "@/components/savenet-logo"
@@ -13,6 +13,7 @@ const links = [
   { href: "/library", label: "Library", icon: Library },
   { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/categories", label: "Labels", icon: FolderCog },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 export function SiteNav() {

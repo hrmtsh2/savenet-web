@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-medium">How we use your data</h2>
             <ul className="flex flex-col gap-2 text-muted-foreground">
-              <li>Post content is processed by Google Gemini for optional enrichment and vector embeddings used in search. This processing happens server-side via the Vercel AI Gateway.</li>
+              <li>Post content may be processed by Google Gemini for OCR and vector embeddings used in search. This processing happens server-side.</li>
               <li>Post URLs may be fetched server-side to extract additional context (page title, description, menu information) to improve recommendations.</li>
               <li>Your data is stored in Amazon Aurora PostgreSQL, hosted in the AWS Asia Pacific (Mumbai) region.</li>
             </ul>

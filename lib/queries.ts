@@ -7,7 +7,6 @@ import type {
   ConversationListItem,
   Message,
   RecommendationCandidate,
-  EntityEnrichmentData,
   LabelMatch,
 } from "./types"
 
@@ -18,7 +17,7 @@ const SOURCE_LABELS = {
   reading_list: "Reading List",
 } as const
 
-/** Labels are only created deliberately: by a user, a source capture, or an import. */
+// Labels are only created deliberately: by a user, by a post capture, or an import.
 export async function getOrCreateLabel(userId: string, name: string, system = false): Promise<Category> {
   const { rows } = await query<Category>(
     `INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)
@@ -156,9 +155,7 @@ export async function getPostsForUser(
   return rows
 }
 
-/* ------------------------------------------------------------------ */
-/* Chat / recommendation queries                                       */
-/* ------------------------------------------------------------------ */
+// Chat recommendation queries
 
 export async function createConversation(
   userId: string,
@@ -176,7 +173,7 @@ export async function createConversation(
   return rows[0]
 }
 
-/** Fetch a conversation scoped to its owner, or null. */
+// Fetch a conversation owned by userId. Or null.
 export async function getConversation(userId: string, conversationId: number): Promise<Conversation | null> {
   const { rows } = await query<Conversation>(
     `SELECT id, user_id, category_id, label_ids, label_match, title, created_at
@@ -223,11 +220,7 @@ export async function addMessage(
   return rows[0]
 }
 
-/**
- * Vector similarity search (cosine distance) over a user's posts within a
- * single category. Returns the top N candidates with the data needed for
- * synthesis. Relies on the hnsw (vector_cosine_ops) index.
- */
+// Vector similarity search within the selected labels, over an HNSW index constructed using the user's posts.
 export async function searchSimilarPosts(
   userId: string,
   categoryIds: number[],
@@ -249,31 +242,6 @@ export async function searchSimilarPosts(
     [userId, categoryIds, toVectorLiteral(embedding), limit],
   )
   return rows
-}
-
-/** Return cached enrichment data for an entity if newer than maxAgeDays. */
-export async function getFreshEnrichment(
-  entityId: number,
-  maxAgeDays = 21,
-): Promise<EntityEnrichmentData | null> {
-  const { rows } = await query<{ data: EntityEnrichmentData }>(
-    `SELECT data FROM entity_enrichment
-     WHERE entity_id = $1 AND source = 'web_search'
-       AND fetched_at > now() - ($2 || ' days')::interval
-     ORDER BY fetched_at DESC
-     LIMIT 1`,
-    [entityId, String(maxAgeDays)],
-  )
-  return rows[0]?.data ?? null
-}
-
-/** Upsert fresh web-search enrichment for an entity. */
-export async function saveEnrichment(entityId: number, data: EntityEnrichmentData): Promise<void> {
-  await query(
-    `INSERT INTO entity_enrichment (entity_id, source, data, fetched_at)
-     VALUES ($1, 'web_search', $2, now())`,
-    [entityId, JSON.stringify(data)],
-  )
 }
 
 export async function getPostsByIds(userId: string, ids: number[]): Promise<PostWithRelations[]> {

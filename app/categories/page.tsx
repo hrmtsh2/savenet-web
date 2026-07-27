@@ -2,12 +2,16 @@ import { SiteNav } from "@/components/site-nav"
 import { CategoriesManager } from "@/components/categories-manager"
 import { requireUserId } from "@/lib/auth"
 import { getCategoriesWithCounts } from "@/lib/queries"
+import { listEntityAgentConfigs } from "@/lib/agents"
 
 // export const dynamic = "force-dynamic"
 
 export default async function CategoriesPage() {
   const userId = await requireUserId()
-  const categories = await getCategoriesWithCounts(userId)
+  const [categories, entityAgentConfigs] = await Promise.all([
+    getCategoriesWithCounts(userId),
+    listEntityAgentConfigs(userId),
+  ])
 
   return (
     <div className="min-h-screen">
@@ -20,7 +24,7 @@ export default async function CategoriesPage() {
           </p>
         </div>
 
-        <CategoriesManager categories={categories} />
+        <CategoriesManager categories={categories} entityAgentConfigs={entityAgentConfigs} />
       </main>
     </div>
   )

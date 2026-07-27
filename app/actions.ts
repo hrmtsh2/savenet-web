@@ -5,6 +5,10 @@ import { query } from "@/lib/db"
 import { requireUserId } from "@/lib/auth"
 import { getConversation, getMessages, getPostsByIds } from "@/lib/queries"
 import { runChatTurn, ChatError, type ChatTurnResult } from "@/lib/chat"
+import { encryptApiKey, keyHint } from "@/lib/ai-credentials"
+import { queueEntityAgentRun } from "@/lib/agents"
+import { queueAutoLabelRun } from "@/lib/agents"
+import { getDigestConfig, sendDigest } from "@/lib/digests"
 import type { LabelMatch } from "@/lib/types"
 
 export async function sendChatMessage(input: {
@@ -36,6 +40,136 @@ export async function loadConversation(conversationId: number) {
     id: post.id, postUrl: post.post_url, thumbnailUrl: post.thumbnail_url, summary: post.summary, platform: post.platform,
   }]))
   return { ok: true as const, conversation, messages, postsById }
+}
+
+export async function saveChatModelPreference(input: {
+  credentialSource: "platform" | "byok"
+  modelId: string
+  apiKey?: string
+}) {
+  const userId = await requireUserId()
+  const modelId = input.modelId.trim()
+  if (input.credentialSource !== "platform" && input.credentialSource !== "byok") return { error: "Invalid credential source." }
+  if (!modelId || modelId.length > 160 || !/^[a-zA-Z0-9._:/-]+$/.test(modelId)) return { error: "Enter a valid model ID." }
+  const provider = input.credentialSource === "platform" ? "google" : "openrouter"
+  const selectedModelId = input.credentialSource === "platform" ? "gemini-2.5-flash" : modelId
+
+  if (input.credentialSource === "byok") {
+    const apiKey = input.apiKey?.trim()
+    const { rows: existing } = await query<{ provider: string }>(
+      "SELECT provider FROM ai_provider_credentials WHERE user_id = $1 AND provider = $2",
+      [userId, provider],
+    )
+    if (!existing[0] && !apiKey) return { error: "Enter an API key for this provider." }
+    if (apiKey) {
+      if (apiKey.length < 8 || apiKey.length > 1000) return { error: "Enter a valid API key." }
+      try {
+        await query(
+          `INSERT INTO ai_provider_credentials (user_id, provider, encrypted_api_key, key_hint)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (user_id, provider) DO UPDATE
+           SET encrypted_api_key = EXCLUDED.encrypted_api_key, key_hint = EXCLUDED.key_hint, updated_at = now()`,
+          [userId, provider, encryptApiKey(apiKey), keyHint(apiKey)],
+        )
+      } catch (error) {
+        console.log("[savenet] could not save BYOK credential:", (error as Error).message)
+        return { error: "Could not securely save that API key. Check the server encryption key." }
+      }
+    }
+  }
+
+  await query(
+    `INSERT INTO ai_model_preferences (user_id, feature, provider, model_id, credential_source)
+     VALUES ($1, 'chat', $2, $3, $4)
+     ON CONFLICT (user_id, feature) DO UPDATE
+     SET provider = EXCLUDED.provider, model_id = EXCLUDED.model_id,
+         credential_source = EXCLUDED.credential_source, updated_at = now()`,
+    [userId, provider, selectedModelId, input.credentialSource],
+  )
+  revalidatePath("/settings")
+  return { ok: true as const }
+}
+
+export async function saveEntityAgentConfig(input: {
+  labelId: number
+  enabled: boolean
+  instructions: string
+  allowWebResearch: boolean
+}) {
+  const userId = await requireUserId()
+  const labelId = Number(input.labelId)
+  const instructions = input.instructions.trim()
+  if (!Number.isInteger(labelId) || labelId < 1) return { error: "Invalid label." }
+  if (!instructions) return { error: "Add instructions for this agent." }
+  if (instructions.length > 4_000) return { error: "Instructions must be 4,000 characters or fewer." }
+
+  const { rows: labels } = await query<{ id: number }>(
+    "SELECT id FROM categories WHERE id = $1 AND user_id = $2",
+    [labelId, userId],
+  )
+  if (!labels[0]) return { error: "Label not found." }
+
+  const updated = await query<{ id: number }>(
+    `UPDATE agent_configs
+     SET enabled = $3, instructions = $4, allow_web_research = $5, updated_at = now()
+     WHERE user_id = $1 AND kind = 'entity_enrichment' AND label_id = $2
+     RETURNING id`,
+    [userId, labelId, input.enabled, instructions, input.allowWebResearch],
+  )
+  if (!updated.rows[0]) {
+    await query(
+      `INSERT INTO agent_configs (user_id, kind, label_id, enabled, instructions, allow_web_research)
+       VALUES ($1, 'entity_enrichment', $2, $3, $4, $5)`,
+      [userId, labelId, input.enabled, instructions, input.allowWebResearch],
+    )
+  }
+  revalidatePath("/categories")
+  return { ok: true as const }
+}
+
+export async function queueExistingEntityAgentPosts(configId: number) {
+  const userId = await requireUserId()
+  const result = await queueEntityAgentRun(userId, Number(configId), "retroactive")
+  if (!result) return { error: "Enable and save this entity agent first." }
+  revalidatePath("/categories")
+  return { ok: true as const, totalItems: result.totalItems }
+}
+
+export async function autoLabelFilteredPosts(input: { sourceLabelIds: number[]; labelMatch: LabelMatch; searchQuery?: string; destinationLabelIds: number[]; instructions: string }) {
+  const userId = await requireUserId()
+  try {
+    const result = await queueAutoLabelRun({ userId, ...input })
+    revalidatePath("/library")
+    return { ok: true as const, totalItems: result.totalItems }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not queue auto-labeller." }
+  }
+}
+
+export async function saveDigestConfig(input: { enabled: boolean; instructions: string; labelIds: number[] }) {
+  const userId = await requireUserId()
+  const instructions = input.instructions.trim().slice(0, 4000)
+  const labelIds = [...new Set(input.labelIds.filter((id) => Number.isInteger(id) && id > 0))]
+  await query(
+    `INSERT INTO digest_configs (user_id, enabled, instructions, label_ids)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id) DO UPDATE SET enabled = EXCLUDED.enabled, instructions = EXCLUDED.instructions, label_ids = EXCLUDED.label_ids, updated_at = now()`,
+    [userId, input.enabled, instructions, labelIds],
+  )
+  revalidatePath("/settings")
+  return { ok: true as const }
+}
+
+export async function sendDigestPreview() {
+  const userId = await requireUserId()
+  const config = await getDigestConfig(userId)
+  if (!config) return { error: "Save the digest configuration first." }
+  try {
+    await sendDigest(config)
+    return { ok: true as const }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not send digest." }
+  }
 }
 
 export async function createCategory(formData: FormData) {
