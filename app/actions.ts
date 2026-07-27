@@ -144,7 +144,7 @@ export async function autoLabelFilteredPosts(input: { sourceLabelIds: number[]; 
     revalidatePath("/library")
     return { ok: true as const, totalItems: result.totalItems }
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not queue auto-labeller." }
+    return { error: error instanceof Error ? error.message : "Could not start auto-labelling." }
   }
 }
 
@@ -283,6 +283,43 @@ export async function addLabelToFilteredPosts(input: { labelId: number; sourceLa
   )
   revalidatePath("/library")
   revalidatePath("/categories")
+  return { ok: true as const, added: result.rows.length }
+}
+
+export async function createLabelAndAddToFilteredPosts(input: { name: string; sourceLabelIds?: number[]; labelMatch?: LabelMatch; searchQuery?: string }) {
+  const userId = await requireUserId()
+  const name = input.name.trim().slice(0, 100)
+  const sourceLabelIds = [...new Set((input.sourceLabelIds ?? []).filter((id) => Number.isInteger(id) && id > 0))]
+  const labelMatch = input.labelMatch === "all" ? "all" : "any"
+  const searchQuery = input.searchQuery?.trim().slice(0, 200) || null
+  if (!name) return { error: "Enter a label name." }
+
+  const result = await query<{ post_id: number }>(
+    `WITH label AS (
+       INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)
+       VALUES ($1, $2, NULL, false, false, false)
+       ON CONFLICT (user_id, lower(name)) DO UPDATE SET name = categories.name
+       RETURNING id
+     )
+     INSERT INTO post_labels (post_id, label_id)
+     SELECT p.id, label.id
+     FROM posts p CROSS JOIN label
+     WHERE p.user_id = $1
+       AND ${labelMatch === "all"
+         ? `(cardinality($3::int[]) = 0 OR (SELECT count(DISTINCT pl.label_id) FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($3::int[])) = cardinality($3::int[]))`
+         : `(cardinality($3::int[]) = 0 OR EXISTS (SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($3::int[])))`}
+       AND ($4::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $4))
+     ON CONFLICT DO NOTHING
+     RETURNING post_id`,
+    [userId, name, sourceLabelIds, searchQuery],
+  )
+  revalidatePath("/library")
+  revalidatePath("/categories")
+  revalidatePath("/chat")
   return { ok: true as const, added: result.rows.length }
 }
 

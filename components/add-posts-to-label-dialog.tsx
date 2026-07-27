@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { Tag } from "lucide-react"
 import { toast } from "sonner"
-import { addLabelToFilteredPosts, addLabelToPosts } from "@/app/actions"
+import { addLabelToFilteredPosts, addLabelToPosts, createLabelAndAddToFilteredPosts } from "@/app/actions"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,6 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import type { CategoryWithCount, LabelMatch } from "@/lib/types"
 
 type Props = {
@@ -41,14 +42,18 @@ export function AddPostsToLabelDialog({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [labelId, setLabelId] = useState("")
+  const [newLabelName, setNewLabelName] = useState("")
   const [pending, startTransition] = useTransition()
   const availableLabels = categories.filter((label) => !excludedLabelIds.includes(label.id))
   const isSinglePost = Boolean(postIds?.length)
 
   function addLabel() {
-    if (!labelId) return
+    const name = newLabelName.trim()
+    if (!labelId && !name) return
     startTransition(async () => {
-      const result = isSinglePost
+      const result = !isSinglePost && name
+        ? await createLabelAndAddToFilteredPosts({ name, sourceLabelIds, labelMatch, searchQuery })
+        : isSinglePost
         ? await addLabelToPosts({ labelId: Number(labelId), postIds: postIds || [] })
         : await addLabelToFilteredPosts({ labelId: Number(labelId), sourceLabelIds, labelMatch, searchQuery })
       if (result.error) {
@@ -57,6 +62,7 @@ export function AddPostsToLabelDialog({
       }
       toast.success(result.added === 0 ? "Those posts already have this label" : `Added label to ${result.added} ${result.added === 1 ? "post" : "posts"}`)
       setLabelId("")
+      setNewLabelName("")
       setOpen(false)
     })
   }
@@ -86,9 +92,20 @@ export function AddPostsToLabelDialog({
             {availableLabels.map((label) => <SelectItem key={label.id} value={String(label.id)}>{label.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {!isSinglePost ? (
+          <div className="space-y-2">
+            <p className="text-center text-xs text-muted-foreground">or create a new label for this view</p>
+            <Input
+              value={newLabelName}
+              onChange={(event) => setNewLabelName(event.target.value)}
+              placeholder="New label name"
+              maxLength={100}
+            />
+          </div>
+        ) : null}
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
-          <Button type="button" onClick={addLabel} disabled={!labelId || pending}>
+          <Button type="button" onClick={addLabel} disabled={(!labelId && !newLabelName.trim()) || pending}>
             Add label
           </Button>
         </DialogFooter>

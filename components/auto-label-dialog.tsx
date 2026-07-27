@@ -15,14 +15,14 @@ export function AutoLabelDialog({ categories, sourceLabelIds, labelMatch, search
   const [instructions, setInstructions] = useState("")
   const [pending, startTransition] = useTransition()
   const targets = categories.filter((label) => !sourceLabelIds.includes(label.id))
-  function queue() {
+  function startLabelling() {
     startTransition(async () => {
       const result = await autoLabelFilteredPosts({ sourceLabelIds, labelMatch, searchQuery, destinationLabelIds: selected, instructions })
       if (result.error) {
         toast.error(result.error)
         return
       }
-      toast.success(`${result.totalItems} posts queued for labelling`)
+      toast.success(`Labelling has begun for ${result.totalItems} posts. It will complete soon.`)
       setOpen(false)
     })
   }
@@ -31,7 +31,7 @@ export function AutoLabelDialog({ categories, sourceLabelIds, labelMatch, search
     <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Auto-label this view</DialogTitle><DialogDescription>Classify all {count} matching posts (including posts beyond this page). Existing labels are never removed.</DialogDescription></DialogHeader>
       <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border p-3">{targets.map((label) => <label key={label.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(label.id)} onChange={() => setSelected(selected.includes(label.id) ? selected.filter((id) => id !== label.id) : [...selected, label.id])} />{label.name}</label>)}</div>
       <Textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} placeholder="Optional guidance, e.g. apply Delhi only to places in Delhi." maxLength={2000} />
-      <DialogFooter><DialogClose render={<Button variant="outline" />}>Cancel</DialogClose><Button onClick={queue} disabled={!selected.length || pending}>{pending ? "Queueing…" : "Queue labeller"}</Button></DialogFooter>
+      <DialogFooter><DialogClose render={<Button variant="outline" />}>Cancel</DialogClose><Button onClick={startLabelling} disabled={!selected.length || pending}>{pending ? "Starting..." : "Start labelling"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>
 }
