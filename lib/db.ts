@@ -2,10 +2,11 @@ import { Pool, type PoolClient } from "pg"
 import { Signer } from "@aws-sdk/rds-signer"
 import { awsCredentialsProvider } from "@vercel/functions/oidc"
 import { attachDatabasePool } from "@vercel/functions"
+import { awsRoleArn } from "@/lib/aws"
 
 const signer = new Signer({
   credentials: awsCredentialsProvider({
-    roleArn: process.env.AWS_ROLE_ARN!,
+    roleArn: awsRoleArn,
     clientConfig: { region: process.env.AWS_REGION },
   }),
   region: process.env.AWS_REGION,

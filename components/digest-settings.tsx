@@ -17,7 +17,15 @@ export function DigestSettings({ config, categories }: { config: DigestConfig | 
   const [labelIds, setLabelIds] = useState(config?.label_ids ?? [])
   const [pending, startTransition] = useTransition()
   const save = () => startTransition(async () => { await saveDigestConfig({ enabled, instructions, labelIds }); toast.success("Digest settings saved") })
-  const preview = () => startTransition(async () => { const result = await sendDigestPreview(); result.error ? toast.error(result.error) : toast.success("Digest sent") })
+  const preview = () => startTransition(async () => {
+    const result = await sendDigestPreview()
+    if (result.error) {
+      console.error("Digest test failed:", result.error)
+      toast.error(result.error, { duration: 15_000 })
+      return
+    }
+    toast.success("Digest sent")
+  })
   return (
     <Card className="space-y-4 p-5 sm:p-6">
       <div className="flex items-center justify-between gap-4">

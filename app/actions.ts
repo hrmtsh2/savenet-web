@@ -170,6 +170,7 @@ export async function sendDigestPreview() {
     await sendDigest(config)
     return { ok: true as const }
   } catch (error) {
+    console.error("[savenet] digest test failed:", error)
     return { error: error instanceof Error ? error.message : "Could not send digest." }
   }
 }

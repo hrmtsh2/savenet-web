@@ -1,10 +1,11 @@
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2"
 import { awsCredentialsProvider } from "@vercel/functions/oidc"
+import { awsRoleArn } from "@/lib/aws"
 
 const client = new SESv2Client({
   region: process.env.AWS_REGION,
   credentials: awsCredentialsProvider({
-    roleArn: process.env.AWS_ROLE_ARN!,
+    roleArn: awsRoleArn,
     clientConfig: { region: process.env.AWS_REGION },
   }),
 })
