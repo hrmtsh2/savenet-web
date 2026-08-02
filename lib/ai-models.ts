@@ -3,7 +3,7 @@ import { createOpenAI } from "@ai-sdk/openai"
 
 export const aiProviders = ["google", "openrouter"] as const
 export type AiProvider = (typeof aiProviders)[number]
-export type AiFeature = "chat" | "entity_agent" | "auto_labeller" | "digest"
+export type AiFeature = "chat" | "entity_agent" | "auto_labeller" | "digest" | "digest_research"
 
 export const platformDefaultModel = {
   provider: "google" as const,

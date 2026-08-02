@@ -18,6 +18,7 @@ export function DigestSettings({ config, categories }: { config: DigestConfig | 
   const [pending, startTransition] = useTransition()
   const save = () => startTransition(async () => { await saveDigestConfig({ enabled, instructions, labelIds }); toast.success("Digest settings saved") })
   const preview = () => startTransition(async () => {
+    await saveDigestConfig({ enabled, instructions, labelIds })
     const result = await sendDigestPreview()
     if (result.error) {
       console.error("Digest test failed:", result.error)
