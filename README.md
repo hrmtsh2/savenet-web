@@ -12,7 +12,7 @@ This repository `savenet-web` contains the Next.js app and its server-side captu
 - uses OCR and captured context to make image-based posts searchable
 - provides a paginated library, label management, keyword search, and chat answers that link back to saved posts
 - lets users keep Gemini 2.5 Flash as the default model or bring an OpenRouter API key and model of their choice
-- runs label-specific entity agents, view-wide auto-labelling, and optional email digests
+- runs label-specific label agents, view-wide auto-labelling, and optional email digests
 - authenticates the web app through Amazon Cognito and NextAuth
 
 User-provided model keys are encrypted before storage.

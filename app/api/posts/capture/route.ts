@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     try {
       await queueCaptureEntityAgents(userId, postId, postLabels.map((label) => label.label_id))
     } catch (error) {
-      console.log("[savenet] could not queue entity agent:", (error as Error).message)
+      console.log("[savenet] could not queue label agent:", (error as Error).message)
     }
 
     const summary = caption || scopeText || null

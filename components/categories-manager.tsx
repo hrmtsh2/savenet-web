@@ -152,7 +152,7 @@ function EntityAgentDialog({ label, agentConfig }: { label: CategoryWithCount; a
         return
       }
       setOpen(false)
-      toast.success(enabled ? "Entity agent enabled" : "Entity agent saved")
+      toast.success(enabled ? "Label agent enabled" : "Label agent saved")
     })
   }
 
@@ -170,12 +170,12 @@ function EntityAgentDialog({ label, agentConfig }: { label: CategoryWithCount; a
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Configure entity agent for ${label.name}`} />}>
+      <DialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label={`Configure label agent for ${label.name}`} />}>
         <Sparkles className={`h-4 w-4 ${agentConfig?.enabled ? "text-primary" : ""}`} />
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Entity agent for “{label.name}”</DialogTitle>
+          <DialogTitle>Label agent for “{label.name}”</DialogTitle>
           <DialogDescription>
             Define what the agent should extract from posts carrying this label. It will later run over existing posts and new saves.
           </DialogDescription>

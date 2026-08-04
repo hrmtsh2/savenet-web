@@ -80,12 +80,6 @@ export default function LoginPage() {
             {loading ? "Redirecting..." : "Continue with SaveNet"}
           </button>
 
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground">new here?</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-medium text-indigo-600 hover:underline">

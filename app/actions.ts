@@ -132,7 +132,7 @@ export async function saveEntityAgentConfig(input: {
 export async function queueExistingEntityAgentPosts(configId: number) {
   const userId = await requireUserId()
   const result = await queueEntityAgentRun(userId, Number(configId), "retroactive")
-  if (!result) return { error: "Enable and save this entity agent first." }
+  if (!result) return { error: "Enable and save this label agent first." }
   revalidatePath("/categories")
   return { ok: true as const, totalItems: result.totalItems }
 }
