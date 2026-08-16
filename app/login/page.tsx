@@ -71,7 +71,8 @@ export default function LoginPage() {
             <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>
             <p className="mt-1 text-sm text-muted-foreground">Sign In</p>
           </div>
-
+          
+          {/* Log In Button */}
           <button
             onClick={() => { setLoading(true); signIn("cognito", { callbackUrl: "/library" }) }}
             disabled={loading}

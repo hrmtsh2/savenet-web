@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Savenet",
   description:
-    "AI-enabled sorting and chatting over saved Instagram and X posts.",
+    "AI-enabled sorting and chatting over saved Instagram, X posts and browser bookmarks and reading list items.",
   icons: {
     icon: "/icon.svg",
     apple: "/icon.svg",

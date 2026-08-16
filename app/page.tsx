@@ -204,6 +204,8 @@ export default async function LandingPage() {
             <Link href = "https://github.com/hrmtsh2/savenet-web" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               GitHub
             </Link>
+            <Link href = "https://buymeacoffee.com/hrmtsh" className="text-xs text-muted-foreground hover:text-foreground transition-colors"> 
+            </Link>
           </div>
         </div>
       </footer>

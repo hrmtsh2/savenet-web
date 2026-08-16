@@ -51,15 +51,16 @@ function digestLinks(posts: DigestPost[], referencedIds: number[]) {
       const url = new URL(post.post_url)
       if (url.protocol !== "https:" && url.protocol !== "http:") return []
       const title = (post.summary || post.caption || "Saved post").replace(/\s+/g, " ").trim().slice(0, 140)
-      return [{ title: title || "Saved post", url: url.toString() }]
+      return [{ postId: post.id, title: title || "Saved post", url: url.toString() }]
     } catch {
       return []
     }
   })
-  if (!links.length) return { html: "", text: "" }
+  if (!links.length) return { html: "", text: "", postIds: [] }
   return {
     html: `<hr><h2>Saved links</h2><ul>${links.map((link) => `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.title)}</a></li>`).join("")}</ul>`,
     text: `\n\nSaved links:\n${links.map((link) => `- ${link.title}: ${link.url}`).join("\n")}`,
+    postIds: links.map((link) => link.postId),
   }
 }
 
@@ -125,11 +126,24 @@ export async function sendDigest(config: DigestConfig) {
   const email = users[0]?.email
   if (!email) throw new Error("No account email is available for this digest.")
   const { rows: posts } = await query<DigestPost>(
-    `SELECT p.id, p.caption, p.summary, p.post_url, p.created_at
-     FROM posts p WHERE p.user_id = $1
+    `WITH recent_digests AS (
+       SELECT referenced_post_ids
+       FROM digests
+       WHERE config_id = $3 AND status = 'sent'
+       ORDER BY sent_at DESC
+       LIMIT 4
+     ), recently_featured AS (
+       SELECT DISTINCT unnest(referenced_post_ids) AS post_id
+       FROM recent_digests
+     )
+     SELECT p.id, p.caption, p.summary, p.post_url, p.created_at
+     FROM posts p
+     LEFT JOIN recently_featured featured ON featured.post_id = p.id
+     WHERE p.user_id = $1
        AND (cardinality($2::int[]) = 0 OR EXISTS (SELECT 1 FROM post_labels pl WHERE pl.post_id = p.id AND pl.label_id = ANY($2::int[])))
-     ORDER BY p.created_at DESC LIMIT 30`,
-    [config.user_id, config.label_ids],
+     ORDER BY (featured.post_id IS NULL) DESC, p.created_at DESC
+     LIMIT 30`,
+    [config.user_id, config.label_ids, config.id],
   )
   const model = await resolveTextModel(config.user_id, "chat")
   const startedAt = Date.now()
@@ -156,7 +170,7 @@ export async function sendDigest(config: DigestConfig) {
     await query(
       `INSERT INTO digests (user_id, config_id, status, subject, html, text_content, referenced_post_ids, sent_at)
        VALUES ($1, $2, 'sent', $3, $4, $5, $6, now())`,
-      [config.user_id, config.id, result.experimental_output.subject, html, text, referenced],
+      [config.user_id, config.id, result.experimental_output.subject, html, text, links.postIds],
     )
   } catch (error) {
     await finishAiRun({ id: telemetryId, status: "failed", startedAt, error })
