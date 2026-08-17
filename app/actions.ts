@@ -42,6 +42,32 @@ export async function loadConversation(conversationId: number) {
   return { ok: true as const, conversation, messages, postsById }
 }
 
+export async function renameConversation(conversationId: number, title: string) {
+  const userId = await requireUserId()
+  const nextTitle = title.trim().slice(0, 120)
+  if (!Number.isInteger(conversationId) || conversationId < 1) return { error: "Conversation not found." }
+  if (!nextTitle) return { error: "Enter a chat name." }
+  const { rows } = await query<{ title: string }>(
+    "UPDATE conversations SET title = $3 WHERE id = $1 AND user_id = $2 RETURNING title",
+    [conversationId, userId, nextTitle],
+  )
+  if (!rows[0]) return { error: "Conversation not found." }
+  revalidatePath("/chat")
+  return { ok: true as const, title: rows[0].title }
+}
+
+export async function deleteConversation(conversationId: number) {
+  const userId = await requireUserId()
+  if (!Number.isInteger(conversationId) || conversationId < 1) return { error: "Conversation not found." }
+  const { rows } = await query<{ id: number }>(
+    "DELETE FROM conversations WHERE id = $1 AND user_id = $2 RETURNING id",
+    [conversationId, userId],
+  )
+  if (!rows[0]) return { error: "Conversation not found." }
+  revalidatePath("/chat")
+  return { ok: true as const }
+}
+
 export async function saveChatModelPreference(input: {
   credentialSource: "platform" | "byok"
   modelId: string

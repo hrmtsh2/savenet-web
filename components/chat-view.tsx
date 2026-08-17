@@ -2,14 +2,16 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import ReactMarkdown from "react-markdown"
-import { MessagesSquare, Plus, Send, Sparkles, ArrowLeft, Loader2, Check } from "lucide-react"
+import { MessagesSquare, Plus, Send, Sparkles, ArrowLeft, Loader2, Check, Ellipsis, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { sendChatMessage, loadConversation } from "@/app/actions"
+import { sendChatMessage, loadConversation, renameConversation, deleteConversation } from "@/app/actions"
 import { ReferencedPostCard } from "@/components/referenced-post-card"
 import type { CategoryWithCount, ConversationListItem, LabelMatch, ReferencedPost } from "@/lib/types"
 
@@ -79,6 +81,15 @@ export function ChatView({
       setLabelMatch(res.conversation.label_match)
       setMessages(uiMessages)
     })
+  }
+
+  function updateConversationTitle(id: number, title: string) {
+    setConversations((previous) => previous.map((conversation) => conversation.id === id ? { ...conversation, title } : conversation))
+  }
+
+  function removeConversation(id: number) {
+    setConversations((previous) => previous.filter((conversation) => conversation.id !== id))
+    if (conversationId === id) startNewChat()
   }
 
   function onSend() {
@@ -164,18 +175,20 @@ export function ChatView({
               <div key={category} className="flex flex-col gap-1">
                 <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{category}</p>
                 {items.map((c) => (
-                  <button
+                  <div
                     key={c.id}
-                    onClick={() => resume(c)}
                     className={cn(
-                      "truncate rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+                      "group flex items-center rounded-lg transition-colors",
                       c.id === conversationId
                         ? "bg-secondary text-foreground"
                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                     )}
                   >
-                    {c.title || "Untitled chat"}
-                  </button>
+                    <button onClick={() => resume(c)} className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm">
+                      {c.title || "Untitled chat"}
+                    </button>
+                    <ConversationActions conversation={c} onRename={updateConversationTitle} onDelete={removeConversation} />
+                  </div>
                 ))}
               </div>
             ))
@@ -252,6 +265,122 @@ export function ChatView({
         )}
       </Card>
     </div>
+  )
+}
+
+function ConversationActions({
+  conversation,
+  onRename,
+  onDelete,
+}: {
+  conversation: ConversationListItem
+  onRename: (id: number, title: string) => void
+  onDelete: (id: number) => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [title, setTitle] = useState(conversation.title || "")
+  const [pending, startTransition] = useTransition()
+
+  function rename() {
+    startTransition(async () => {
+      const result = await renameConversation(conversation.id, title)
+      if ("error" in result) {
+        toast.error(result.error)
+        return
+      }
+      onRename(conversation.id, result.title)
+      setRenameOpen(false)
+      toast.success("Chat renamed")
+    })
+  }
+
+  function remove() {
+    startTransition(async () => {
+      const result = await deleteConversation(conversation.id)
+      if ("error" in result) {
+        toast.error(result.error)
+        return
+      }
+      onDelete(conversation.id)
+      setDeleteOpen(false)
+      toast.success("Chat deleted")
+    })
+  }
+
+  return (
+    <>
+      <div className="relative pr-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 opacity-70 hover:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation()
+            setMenuOpen((open) => !open)
+          }}
+          aria-label={`Actions for ${conversation.title || "untitled chat"}`}
+        >
+          <Ellipsis className="h-4 w-4" />
+        </Button>
+        {menuOpen ? (
+          <div className="absolute right-0 top-8 z-20 w-32 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+              onClick={() => {
+                setMenuOpen(false)
+                setTitle(conversation.title || "")
+                setRenameOpen(true)
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Rename
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"
+              onClick={() => {
+                setMenuOpen(false)
+                setDeleteOpen(true)
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+            <DialogDescription>Choose a name that makes this conversation easier to find later.</DialogDescription>
+          </DialogHeader>
+          <Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} autoFocus />
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+            <Button type="button" onClick={rename} disabled={!title.trim() || pending}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this chat?</DialogTitle>
+            <DialogDescription>This permanently deletes the conversation and its messages.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+            <Button type="button" variant="destructive" onClick={remove} disabled={pending}>Delete chat</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
