@@ -14,9 +14,6 @@ importers:
       '@ai-sdk/openai':
         specifier: ^3.0.88
         version: 3.0.88(zod@4.4.3)
-      '@aws-sdk/client-rds':
-        specifier: ^3.1068.0
-        version: 3.1068.0
       '@aws-sdk/client-sesv2':
         specifier: ^3.1094.0
         version: 3.1094.0
@@ -41,15 +38,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      jose:
-        specifier: ^6.2.3
-        version: 6.2.3
       lucide-react:
         specifier: ^1.16.0
         version: 1.17.0(react@19.2.4)
-      nanoid:
-        specifier: ^5.1.11
-        version: 5.1.11
       next:
         specifier: 16.2.6
         version: 16.2.6(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -177,10 +168,6 @@ packages:
     resolution: {integrity: sha512-by2Qj3f9BI9X4cY0n160R3uzkMpI6k9PmGA8QLAuzr8HzkiNrYFygMEPhIEdqBFHQPD/8AXNUs45HYjEDsQ33g==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/client-rds@3.1068.0':
-    resolution: {integrity: sha512-bmX3pZQK333SNVnAH/QyEedETbMPH7KByfgbDGa5tpDAKCl95oUUiOP6mOocNVMApnTSQHHKeO5mzajxLR4TKg==}
-    engines: {node: '>=20.0.0'}
-
   '@aws-sdk/client-sesv2@3.1094.0':
     resolution: {integrity: sha512-DmJyfB1MYKX9ds0OgElXk56o/1dq/H32RSgLqt/FBTNJFhUU+pXdOmn/h4YdnbSc5fCSfNfOQS4oMPIFsQ6BmA==}
     engines: {node: '>=20.0.0'}
@@ -263,10 +250,6 @@ packages:
 
   '@aws-sdk/credential-providers@3.1068.0':
     resolution: {integrity: sha512-DN7UewD/XKGfNGWXZsTECWRj3IsULkE7aG+fPwqPf13CnX4UmNvj80g1xieJ0lVdMQ2h0L3gZpn2ClIY06+/vQ==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/middleware-sdk-rds@3.972.34':
-    resolution: {integrity: sha512-+UFkYLaGqN/VvWPKV0N2QKq4UZZlWzrMcuyZFPCYqanaPnonnHNg3n7vFkGNvU0DXe4oynaW0+MLZW/HMjCshA==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/nested-clients@3.997.20':
@@ -2090,11 +2073,6 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@5.1.11:
-    resolution: {integrity: sha512-v+KEsUv2ps74PaSKv0gHTxTCgMXOIfBEbaqa6w6ISIGC7ZsvHN4N9oJ8d4cmf0n5oTzQz2SLmThbQWhjd/8eKg==}
-    engines: {node: ^18 || >=20}
-    hasBin: true
-
   negotiator@1.0.0:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
     engines: {node: '>= 0.6'}
@@ -2911,20 +2889,6 @@ snapshots:
       '@smithy/types': 4.14.4
       tslib: 2.8.1
 
-  '@aws-sdk/client-rds@3.1068.0':
-    dependencies:
-      '@aws-crypto/sha256-browser': 5.2.0
-      '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.974.20
-      '@aws-sdk/credential-provider-node': 3.972.55
-      '@aws-sdk/middleware-sdk-rds': 3.972.34
-      '@aws-sdk/types': 3.973.12
-      '@smithy/core': 3.24.7
-      '@smithy/fetch-http-handler': 5.4.7
-      '@smithy/node-http-handler': 4.7.8
-      '@smithy/types': 4.14.4
-      tslib: 2.8.1
-
   '@aws-sdk/client-sesv2@3.1094.0':
     dependencies:
       '@aws-sdk/core': 3.976.0
@@ -3152,15 +3116,6 @@ snapshots:
       '@aws-sdk/types': 3.973.12
       '@smithy/core': 3.24.7
       '@smithy/credential-provider-imds': 4.3.9
-      '@smithy/types': 4.14.4
-      tslib: 2.8.1
-
-  '@aws-sdk/middleware-sdk-rds@3.972.34':
-    dependencies:
-      '@aws-sdk/core': 3.974.20
-      '@aws-sdk/types': 3.973.12
-      '@smithy/core': 3.24.7
-      '@smithy/signature-v4': 5.4.7
       '@smithy/types': 4.14.4
       tslib: 2.8.1
 
@@ -5017,8 +4972,6 @@ snapshots:
   mute-stream@3.0.0: {}
 
   nanoid@3.3.11: {}
-
-  nanoid@5.1.11: {}
 
   negotiator@1.0.0: {}
 
