@@ -17,7 +17,6 @@ const SOURCE_LABELS = {
   reading_list: "Reading List",
 } as const
 
-// Labels are only created deliberately: by a user, by a post capture, or an import.
 export async function getOrCreateLabel(userId: string, name: string, system = false): Promise<Category> {
   const { rows } = await query<Category>(
     `INSERT INTO categories (user_id, name, description, enable_entity_resolution, enable_web_enrichment, auto_created)

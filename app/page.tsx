@@ -56,14 +56,22 @@ export default async function LandingPage() {
             Save smarter,<br /> find faster
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-indigo-200">
-            SaveNet captures what you save on Instagram, X, and your browser, keeps it searchable, and lets you ask useful questions about it later.
+            SaveNet captures what you save on Instagram, X, and your browser, all in one place. With everything searchable, SaveNet also lets you chat about your saved posts with AI.
           </p>
+          <br></br>
+          <p>To get started, Sign Up and install the accompanying Chrome extension.</p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
               href="/signup"
               className="rounded-lg bg-white px-6 py-3 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
             >
               Sign Up
+            </Link>
+            <Link
+              href="https://chromewebstore.google.com/detail/savenet-save-smarter-find/kmbfnbpogmgfmlohnajkpmeicocpedof"
+              className="rounded-lg border border-white/30 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            >
+              Get the Extension
             </Link>
             <Link
               href="/login"
