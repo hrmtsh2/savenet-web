@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { query } from "@/lib/db"
+import { query, withConnection } from "@/lib/db"
 import { requireUserId } from "@/lib/auth"
 import { getConversation, getMessages, getPostsByIds } from "@/lib/queries"
 import { runChatTurn, ChatError, type ChatTurnResult } from "@/lib/chat"
@@ -275,6 +275,56 @@ export async function addLabelToPosts(input: { labelId: number; postIds: number[
   revalidatePath("/library")
   revalidatePath("/categories")
   return { ok: true as const, added: result.rows.length }
+}
+
+export async function setPostLabels(input: { postId: number; labelIds: number[] }) {
+  const userId = await requireUserId()
+  const postId = Number(input.postId)
+  const labelIds = [...new Set(input.labelIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+  if (!Number.isInteger(postId) || postId < 1) return { error: "Post not found." }
+
+  const { rows: posts } = await query<{ id: number }>(
+    "SELECT id FROM posts WHERE id = $1 AND user_id = $2",
+    [postId, userId],
+  )
+  if (!posts[0]) return { error: "Post not found." }
+
+  if (labelIds.length > 0) {
+    const { rows: labels } = await query<{ id: number }>(
+      "SELECT id FROM categories WHERE user_id = $1 AND id = ANY($2::int[])",
+      [userId, labelIds],
+    )
+    if (labels.length !== labelIds.length) return { error: "One or more labels were not found." }
+  }
+
+  await withConnection(async (client) => {
+    await client.query("BEGIN")
+    try {
+      await client.query(
+        "DELETE FROM post_labels WHERE post_id = $1",
+        [postId],
+      )
+      if (labelIds.length > 0) {
+        await client.query(
+          `INSERT INTO post_labels (post_id, label_id)
+           SELECT $1, id
+           FROM categories
+           WHERE user_id = $2 AND id = ANY($3::int[])
+           ON CONFLICT DO NOTHING`,
+          [postId, userId, labelIds],
+        )
+      }
+      await client.query("COMMIT")
+    } catch (error) {
+      await client.query("ROLLBACK")
+      throw error
+    }
+  })
+
+  revalidatePath("/library")
+  revalidatePath("/categories")
+  revalidatePath("/chat")
+  return { ok: true as const }
 }
 
 export async function addLabelToFilteredPosts(input: { labelId: number; sourceLabelIds?: number[]; labelMatch?: LabelMatch; searchQuery?: string }) {

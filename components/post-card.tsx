@@ -215,7 +215,7 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <div className="flex items-center gap-1">
-            <AddPostsToLabelDialog categories={categories} postIds={[post.id]} count={1} excludedLabelIds={post.labels.map((label) => label.id)} compact />
+            <AddPostsToLabelDialog categories={categories} postIds={[post.id]} count={1} excludedLabelIds={post.labels.map((label) => label.id)} compact checklist />
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger
                 render={

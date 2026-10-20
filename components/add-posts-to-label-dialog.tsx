@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { Sparkles, Tag } from "lucide-react"
 import { toast } from "sonner"
-import { addLabelToFilteredPosts, addLabelToPosts, autoLabelFilteredPosts, createLabelAndAddToFilteredPosts } from "@/app/actions"
+import { addLabelToFilteredPosts, addLabelToPosts, autoLabelFilteredPosts, createLabelAndAddToFilteredPosts, setPostLabels } from "@/app/actions"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -29,6 +29,7 @@ type Props = {
   count: number
   excludedLabelIds?: number[]
   compact?: boolean
+  checklist?: boolean
 }
 
 export function AddPostsToLabelDialog({
@@ -40,6 +41,7 @@ export function AddPostsToLabelDialog({
   count,
   excludedLabelIds = [],
   compact = false,
+  checklist = false,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<"manual" | "auto">("manual")
@@ -48,9 +50,10 @@ export function AddPostsToLabelDialog({
   const [newLabelName, setNewLabelName] = useState("")
   const [instructions, setInstructions] = useState("")
   const [pending, startTransition] = useTransition()
-  const availableLabels = categories.filter((label) => !excludedLabelIds.includes(label.id))
+  const availableLabels = checklist ? categories : categories.filter((label) => !excludedLabelIds.includes(label.id))
   const isSinglePost = Boolean(postIds?.length)
   const autoLabelTargets = categories.filter((label) => !sourceLabelIds?.includes(label.id))
+  const [checkedLabelIds, setCheckedLabelIds] = useState<number[]>([])
 
   function addLabel() {
     const name = newLabelName.trim()
@@ -92,8 +95,28 @@ export function AddPostsToLabelDialog({
     })
   }
 
+  function savePostLabels() {
+    const postId = postIds?.[0]
+    if (!postId) return
+    startTransition(async () => {
+      const result = await setPostLabels({ postId, labelIds: checkedLabelIds })
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Post labels updated")
+      setOpen(false)
+    })
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen && checklist) setCheckedLabelIds(postIds ? categories.filter((label) => excludedLabelIds.includes(label.id)).map((label) => label.id) : [])
+        setOpen(nextOpen)
+      }}
+    >
       <DialogTrigger
         render={
           <Button variant="outline" size={compact ? "sm" : "default"} className={compact ? "h-7 gap-1.5 px-2" : "gap-2"} disabled={availableLabels.length === 0} />
@@ -104,16 +127,33 @@ export function AddPostsToLabelDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{mode === "auto" ? "Auto-label this view" : "Add to a label"}</DialogTitle>
+          <DialogTitle>{checklist ? "Manage post labels" : mode === "auto" ? "Auto-label this view" : "Add to a label"}</DialogTitle>
           <DialogDescription>
-            {mode === "auto"
+            {checklist
+              ? "Select every category that applies to this post."
+              : mode === "auto"
               ? `Classify all ${count} matching posts. Existing labels are never removed.`
               : isSinglePost
               ? "This will keep the post’s existing labels and add one more."
               : `This will keep existing labels and add one more to all ${count} posts in the current view.`}
           </DialogDescription>
         </DialogHeader>
-        {!isSinglePost ? (
+        {checklist ? (
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border p-3">
+            {categories.map((label) => (
+              <label key={label.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
+                <input
+                  type="checkbox"
+                  checked={checkedLabelIds.includes(label.id)}
+                  onChange={() => setCheckedLabelIds((current) => current.includes(label.id)
+                    ? current.filter((id) => id !== label.id)
+                    : [...current, label.id])}
+                />
+                {label.name}
+              </label>
+            ))}
+          </div>
+        ) : !isSinglePost ? (
           <div className="grid grid-cols-2 gap-2 rounded-lg border p-1">
             <Button type="button" variant={mode === "manual" ? "secondary" : "ghost"} onClick={() => setMode("manual")}>
               <Tag className="h-4 w-4" /> Add label
@@ -123,7 +163,7 @@ export function AddPostsToLabelDialog({
             </Button>
           </div>
         ) : null}
-        {mode === "auto" ? (
+        {checklist ? null : mode === "auto" ? (
           <>
             <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border p-3">
               {autoLabelTargets.map((label) => (
@@ -166,10 +206,10 @@ export function AddPostsToLabelDialog({
           <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
           <Button
             type="button"
-            onClick={mode === "auto" ? autoLabel : addLabel}
-            disabled={mode === "auto" ? !selectedLabelIds.length || pending : (!labelId && !newLabelName.trim()) || pending}
+            onClick={checklist ? savePostLabels : mode === "auto" ? autoLabel : addLabel}
+            disabled={checklist ? pending : mode === "auto" ? !selectedLabelIds.length || pending : (!labelId && !newLabelName.trim()) || pending}
           >
-            {mode === "auto" ? "Start labelling" : "Add label"}
+            {checklist ? "Save labels" : mode === "auto" ? "Start labelling" : "Add label"}
           </Button>
         </DialogFooter>
       </DialogContent>
