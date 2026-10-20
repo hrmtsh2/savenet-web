@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PostCard } from "@/components/post-card"
 import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
-import { AutoLabelDialog } from "@/components/auto-label-dialog"
 import { deleteFilteredPosts } from "@/app/actions"
 import { toast } from "sonner"
 import {
@@ -134,7 +133,6 @@ export function LibraryView({
             </Select>
           ) : null}
           {total > 0 ? <AddPostsToLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} /> : null}
-          {total > 0 ? <AutoLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} /> : null}
           <Select value={sort} onValueChange={(value) => navigate({ sort: value as PostSort })}>
             <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
