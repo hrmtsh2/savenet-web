@@ -60,7 +60,7 @@ export default function PrivacyPage() {
 
           <section className="flex flex-col gap-2">
             <h2 className="text-base font-medium">Data retention and deletion</h2>
-            <p className="text-muted-foreground">Your posts, labels, and conversations are retained until you delete them. You can delete individual posts from the library view. To delete your account and all associated data, contact us at the email below.</p>
+            <p className="text-muted-foreground">Your posts, labels, and conversations are retained until you delete them. You can delete individual posts from the library view. SaveNet periodically checks saved Instagram and X posts and deletes a saved post, its stored thumbnail, and associated information when the original post is no longer available. To delete your account and all associated data, contact us at the email below.</p>
           </section>
 
           <section className="flex flex-col gap-2">

@@ -52,7 +52,7 @@ The worker only schedules and invokes protected routes, so the same app can move
 
 ### Thumbnail storage configuration
 
-Apply [`scripts/011-add-thumbnail-storage.sql`](./scripts/011-add-thumbnail-storage.sql) after deploying the schema changes. Deploy the infrastructure stack with `WEB_RUNTIME_ROLE_ARN` set to the Vercel runtime role ARN, then set the resulting `ThumbnailBucketName` output as `SAVENET_THUMBNAIL_BUCKET` in the web app. The bucket remains private; the web runtime needs `s3:GetObject` and `s3:PutObject` permissions on it.
+Apply [`scripts/011-add-thumbnail-storage.sql`](./scripts/011-add-thumbnail-storage.sql) and [`scripts/012-add-platform-checks.sql`](./scripts/012-add-platform-checks.sql) after deploying the schema changes. Deploy the infrastructure stack with `WEB_RUNTIME_ROLE_ARN` set to the Vercel runtime role ARN, then set the resulting `ThumbnailBucketName` output as `SAVENET_THUMBNAIL_BUCKET` in the web app. The bucket remains private; the web runtime needs `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` permissions on it.
 
 ## Project structure
 

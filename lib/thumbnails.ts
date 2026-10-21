@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { awsCredentialsProvider } from "@vercel/functions/oidc"
 import { awsRoleArn } from "@/lib/aws"
 
@@ -47,4 +47,9 @@ export async function storeThumbnail(url: string, key: string): Promise<boolean>
 export async function getStoredThumbnail(key: string) {
   if (!bucket) throw new Error("Thumbnail bucket is not configured")
   return client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+}
+
+export async function deleteStoredThumbnail(key: string) {
+  if (!bucket) return
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))
 }
