@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Inbox, ListFilter, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PostCard } from "@/components/post-card"
@@ -76,10 +76,6 @@ export function LibraryView({
     router.push(query ? `/library?${query}` : "/library")
   }, [searchParams, selectedLabelIds, labelMatch, searchQuery, sort, router])
 
-  function toggleLabel(id: number) {
-    navigate({ labelIds: selectedLabelIds.includes(id) ? selectedLabelIds.filter((labelId) => labelId !== id) : [...selectedLabelIds, id] })
-  }
-
   const selectedLabels = categories.filter((label) => selectedLabelIds.includes(label.id))
   const scopeDescription = selectedLabels.length === 0
     ? "posts"
@@ -110,13 +106,20 @@ export function LibraryView({
       </form>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <LabelButton active={selectedLabelIds.length === 0} onClick={() => navigate({ labelIds: [] })} label="All posts" count={allPostsCount} />
-          {categories.map((label) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant={selectedLabelIds.length === 0 ? "secondary" : "outline"} onClick={() => navigate({ labelIds: [] })}>
+            All posts <Badge variant="outline" className="ml-1">{allPostsCount}</Badge>
+          </Button>
+          <LabelFilterDialog
+            categories={categories}
+            selectedLabelIds={selectedLabelIds}
+            onApply={(labelIds) => navigate({ labelIds })}
+          />
+          {selectedLabels.map((label) => (
             <LabelButton
               key={label.id}
-              active={selectedLabelIds.includes(label.id)}
-              onClick={() => toggleLabel(label.id)}
+              active
+              onClick={() => navigate({ labelIds: selectedLabelIds.filter((id) => id !== label.id) })}
               label={label.name}
               count={label.post_count}
             />
@@ -224,5 +227,70 @@ function LabelButton({ active, onClick, label, count }: { active: boolean; onCli
     <button onClick={onClick} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-secondary"}`}>
       {label}<Badge variant={active ? "secondary" : "outline"} className="h-5 min-w-5 justify-center rounded-full px-1.5 text-xs">{count}</Badge>
     </button>
+  )
+}
+
+function LabelFilterDialog({
+  categories,
+  selectedLabelIds,
+  onApply,
+}: {
+  categories: CategoryWithCount[]
+  selectedLabelIds: number[]
+  onApply: (labelIds: number[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [draftLabelIds, setDraftLabelIds] = useState<number[]>(selectedLabelIds)
+
+  function openDialog(nextOpen: boolean) {
+    if (nextOpen) setDraftLabelIds(selectedLabelIds)
+    setOpen(nextOpen)
+  }
+
+  function apply() {
+    onApply(draftLabelIds)
+    setOpen(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={openDialog}>
+      <DialogTrigger
+        render={
+          <Button variant={selectedLabelIds.length ? "secondary" : "outline"}>
+            <ListFilter className="h-4 w-4" />
+            Labels
+            {selectedLabelIds.length ? <Badge variant="outline">{selectedLabelIds.length}</Badge> : null}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Filter by labels</DialogTitle>
+          <DialogDescription>Select the labels to show in the library view.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-72 space-y-1 overflow-y-auto rounded-lg border p-2">
+          {categories.length ? categories.map((label) => (
+            <label key={label.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={draftLabelIds.includes(label.id)}
+                  onChange={() => setDraftLabelIds((current) => current.includes(label.id)
+                    ? current.filter((id) => id !== label.id)
+                    : [...current, label.id])}
+                />
+                {label.name}
+              </span>
+              <Badge variant="outline">{label.post_count}</Badge>
+            </label>
+          )) : <p className="px-2 py-3 text-sm text-muted-foreground">No labels yet.</p>}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setDraftLabelIds([])}>Clear all</Button>
+          <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+          <Button type="button" onClick={apply}>Apply filters</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
