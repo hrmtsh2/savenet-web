@@ -4,6 +4,7 @@ import { fetchXOembed } from "@/lib/capture"
 import { query, toVectorLiteral } from "@/lib/db"
 import { attachExistingLabels, attachLabels, sourceLabelFor } from "@/lib/queries"
 import { queueCaptureEntityAgents } from "@/lib/agents"
+import { storeThumbnail, thumbnailKey } from "@/lib/thumbnails"
 import type { CapturePayload } from "@/lib/types"
 
 export const maxDuration = 60
@@ -56,6 +57,8 @@ export async function POST(req: Request) {
       [userId, body.platform, body.platformPostId ?? null, body.postUrl, caption || null, body.authorHandle ?? null, body.authorName ?? null, thumbnailUrl || null, body.mediaType ?? null, body.capturedAt ?? null, body.sourceUrl ?? null, body.raw ? JSON.stringify(body.raw) : null],
     )
     const postId = savedPosts[0].id
+    const storedThumbnailKey = thumbnailUrl ? thumbnailKey(userId, postId) : null
+    const thumbnailStored = storedThumbnailKey ? await storeThumbnail(thumbnailUrl, storedThumbnailKey) : false
 
     if (body.platform === "x" && (!caption || caption.length < 60)) {
       const oembed = await fetchXOembed(body.postUrl)
@@ -93,9 +96,11 @@ export async function POST(req: Request) {
     await query(
       `UPDATE posts
        SET summary = $1, enriched_text = $2, embedding = $3::vector,
-           thumbnail_url = COALESCE($4, thumbnail_url), updated_at = now()
-       WHERE id = $5 AND user_id = $6`,
-      [summary, enrichedText, toVectorLiteral(embedding), thumbnailUrl || null, postId, userId],
+           thumbnail_url = COALESCE($4, thumbnail_url),
+           thumbnail_s3_key = COALESCE($5, thumbnail_s3_key),
+           updated_at = now()
+       WHERE id = $6 AND user_id = $7`,
+      [summary, enrichedText, toVectorLiteral(embedding), thumbnailUrl || null, thumbnailStored ? storedThumbnailKey : null, postId, userId],
     )
 
     return Response.json({
@@ -103,6 +108,7 @@ export async function POST(req: Request) {
       labels: [sourceLabelFor(body.platform), ...(collectionName ? [collectionName] : [])],
       summary,
       thumbnailUrl: thumbnailUrl || null,
+      thumbnailStored,
       modelCalls: totalCalls(meter),
       modelCallBreakdown: meter,
     })

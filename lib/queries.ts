@@ -123,7 +123,9 @@ export async function getPostsForUser(
     : "p.created_at DESC, p.id DESC"
   const { rows } = await query<PostWithRelations>(
     `SELECT p.id, p.user_id, p.platform, p.platform_post_id, p.post_url, p.caption,
-            p.author_handle, p.author_name, p.thumbnail_url, p.media_type, p.captured_at,
+            p.author_handle, p.author_name,
+            CASE WHEN p.thumbnail_s3_key IS NOT NULL THEN '/api/posts/' || p.id || '/thumbnail' ELSE p.thumbnail_url END AS thumbnail_url,
+            p.media_type, p.captured_at,
             p.further_reading, p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
             p.created_at, p.updated_at,
             c.name AS category_name,
@@ -228,7 +230,9 @@ export async function searchSimilarPosts(
   limit = 8,
 ): Promise<RecommendationCandidate[]> {
   const { rows } = await query<RecommendationCandidate>(
-    `SELECT p.id, p.post_url, p.thumbnail_url, p.captured_at, p.summary, p.enriched_text, p.platform,
+    `SELECT p.id, p.post_url,
+            CASE WHEN p.thumbnail_s3_key IS NOT NULL THEN '/api/posts/' || p.id || '/thumbnail' ELSE p.thumbnail_url END AS thumbnail_url,
+            p.captured_at, p.summary, p.enriched_text, p.platform,
             p.entity_id, e.name AS entity_name, e.location AS entity_location,
             (p.embedding <=> $3::vector) AS distance
      FROM posts p
@@ -247,7 +251,9 @@ export async function getPostsByIds(userId: string, ids: number[]): Promise<Post
   if (ids.length === 0) return []
   const { rows } = await query<PostWithRelations>(
     `SELECT p.id, p.user_id, p.platform, p.platform_post_id, p.post_url, p.caption,
-            p.author_handle, p.author_name, p.thumbnail_url, p.media_type, p.captured_at,
+            p.author_handle, p.author_name,
+            CASE WHEN p.thumbnail_s3_key IS NOT NULL THEN '/api/posts/' || p.id || '/thumbnail' ELSE p.thumbnail_url END AS thumbnail_url,
+            p.media_type, p.captured_at,
             p.source_url, p.raw, p.category_id, p.summary, p.enriched_text, p.entity_id,
             p.created_at, p.updated_at,
             c.name AS category_name,
