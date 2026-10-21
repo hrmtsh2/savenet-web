@@ -51,6 +51,7 @@ export function LibraryView({
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
 
   const navigate = useCallback((changes: { labelIds?: number[]; labelMatch?: LabelMatch; page?: number; query?: string; sort?: PostSort }) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -73,7 +74,9 @@ export function LibraryView({
     else params.delete("page")
 
     const query = params.toString()
-    router.push(query ? `/library?${query}` : "/library")
+    startTransition(() => {
+      router.push(query ? `/library?${query}` : "/library")
+    })
   }, [searchParams, selectedLabelIds, labelMatch, searchQuery, sort, router])
 
   const selectedLabels = categories.filter((label) => selectedLabelIds.includes(label.id))
@@ -83,14 +86,17 @@ export function LibraryView({
       ? `posts with all of ${selectedLabels.map((label) => label.name).join(", ")} labels`
       : `posts with any of ${selectedLabels.map((label) => label.name).join(", ")} labels`
 
+  if (isPending) return <LibraryLoadingSkeleton />
+
   return (
     <div className="flex flex-col gap-5">
       <form
-        className="flex gap-2"
+        className="flex flex-col gap-2 sm:flex-row"
         onSubmit={(event) => {
           event.preventDefault()
           const formData = new FormData(event.currentTarget)
-          navigate({ query: String(formData.get("q") || "") })
+          const query = String(formData.get("q") || "")
+          navigate({ labelIds: selectedLabelIds, query })
         }}
       >
         <div className="relative w-full">
@@ -102,7 +108,22 @@ export function LibraryView({
             </Button>
           ) : null}
         </div>
-        <Button type="submit">Search</Button>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={selectedLabelIds.length === 0}>
+            Search selected labels
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={(event) => {
+              const form = event.currentTarget.closest("form")
+              const query = form ? String(new FormData(form).get("q") || "") : ""
+              navigate({ labelIds: [], query })
+            }}
+          >
+            Search all posts
+          </Button>
+        </div>
       </form>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -172,6 +193,28 @@ export function LibraryView({
           {total > 0 ? <DeleteFilteredPostsDialog labelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} scopeDescription={scopeDescription} total={total} /> : null}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function LibraryLoadingSkeleton() {
+  return (
+    <div className="flex flex-col gap-5" aria-busy="true" aria-label="Loading library">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="h-8 w-full animate-pulse rounded-lg bg-muted" />
+        <div className="h-8 w-32 animate-pulse rounded-lg bg-muted" />
+        <div className="h-8 w-32 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <div className="h-8 w-24 animate-pulse rounded-lg bg-muted" />
+        <div className="h-8 w-24 animate-pulse rounded-lg bg-muted" />
+        <div className="h-8 w-28 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="h-64 animate-pulse rounded-xl bg-muted" />
+        ))}
+      </div>
     </div>
   )
 }
