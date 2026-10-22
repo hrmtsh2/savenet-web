@@ -22,7 +22,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { CategoryWithCount, PostWithRelations } from "@/lib/types"
-import type { LabelMatch, PostSort } from "@/lib/queries"
+import type { LabelMatch } from "@/lib/queries"
 
 interface Props {
   categories: CategoryWithCount[]
@@ -34,7 +34,6 @@ interface Props {
   selectedLabelIds: number[]
   labelMatch: LabelMatch
   searchQuery?: string
-  sort: PostSort
 }
 
 export function LibraryView({
@@ -47,18 +46,16 @@ export function LibraryView({
   selectedLabelIds,
   labelMatch,
   searchQuery,
-  sort,
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  const navigate = useCallback((changes: { labelIds?: number[]; labelMatch?: LabelMatch; page?: number; query?: string; sort?: PostSort }) => {
+  const navigate = useCallback((changes: { labelIds?: number[]; labelMatch?: LabelMatch; page?: number; query?: string }) => {
     const params = new URLSearchParams(searchParams.toString())
     const labelIds = changes.labelIds ?? selectedLabelIds
     const nextLabelMatch = changes.labelMatch ?? labelMatch
     const nextQuery = changes.query === undefined ? searchQuery : changes.query.trim()
-    const nextSort = changes.sort ?? sort
     const nextPage = changes.page ?? 1
 
     if (labelIds.length) params.set("labels", labelIds.join(","))
@@ -68,8 +65,7 @@ export function LibraryView({
     else params.delete("match")
     if (nextQuery) params.set("q", nextQuery)
     else params.delete("q")
-    if (nextSort === "label") params.set("sort", nextSort)
-    else params.delete("sort")
+    params.delete("sort")
     if (nextPage > 1) params.set("page", String(nextPage))
     else params.delete("page")
 
@@ -77,7 +73,7 @@ export function LibraryView({
     startTransition(() => {
       router.push(query ? `/library?${query}` : "/library")
     })
-  }, [searchParams, selectedLabelIds, labelMatch, searchQuery, sort, router])
+  }, [searchParams, selectedLabelIds, labelMatch, searchQuery, router])
 
   const selectedLabels = categories.filter((label) => selectedLabelIds.includes(label.id))
   const scopeDescription = selectedLabels.length === 0
@@ -157,13 +153,6 @@ export function LibraryView({
             </Select>
           ) : null}
           {total > 0 ? <AddPostsToLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} /> : null}
-          <Select value={sort} onValueChange={(value) => navigate({ sort: value as PostSort })}>
-            <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="date">Date added</SelectItem>
-              <SelectItem value="label">Label</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 

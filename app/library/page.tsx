@@ -1,7 +1,7 @@
 import { SiteNav } from "@/components/site-nav"
 import { LibraryView } from "@/components/library-view"
 import { requireUserId } from "@/lib/auth"
-import { getCategoriesWithCounts, getPostsCount, getPostsForUser, type LabelMatch, type PostSort } from "@/lib/queries"
+import { getCategoriesWithCounts, getPostsCount, getPostsForUser, type LabelMatch } from "@/lib/queries"
 
 export const dynamic = "force-dynamic"
 
@@ -10,13 +10,12 @@ const savesPaginationPageSize = 24
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ label?: string; labels?: string; match?: string; page?: string; q?: string; sort?: string }>
+  searchParams: Promise<{ label?: string; labels?: string; match?: string; page?: string; q?: string }>
 }) {
   const userId = await requireUserId()
   const params = await searchParams
   const selectedLabelIds = [...new Set((params.labels ?? params.label ?? "").split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0))]
   const labelMatch: LabelMatch = params.match === "all" ? "all" : "any"
-  const sort: PostSort = params.sort === "label" ? "label" : "date"
   const searchQuery = params.q?.trim().slice(0, 200) || undefined
   const requestedPage = Number(params.page)
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
@@ -32,7 +31,6 @@ export default async function LibraryPage({
     labelMatch,
     limit: savesPaginationPageSize,
     offset: (currentPage - 1) * savesPaginationPageSize,
-    sort,
     searchQuery,
   })
   return (
@@ -58,7 +56,6 @@ export default async function LibraryPage({
           selectedLabelIds={selectedLabelIds}
           labelMatch={labelMatch}
           searchQuery={searchQuery}
-          sort={sort}
         />
       </main>
     </div>

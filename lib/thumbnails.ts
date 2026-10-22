@@ -2,7 +2,7 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
 import { awsCredentialsProvider } from "@vercel/functions/oidc"
 import { awsRoleArn } from "@/lib/aws"
 
-const bucket = process.env.SAVENET_THUMBNAIL_BUCKET
+const bucket = process.env.THUMBNAIL_S3_BUCKET
 const client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: awsCredentialsProvider({

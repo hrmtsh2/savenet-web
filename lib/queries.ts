@@ -80,7 +80,6 @@ export async function getCategoriesWithCounts(userId: string): Promise<CategoryW
   return rows
 }
 
-export type PostSort = "date" | "label"
 export type { LabelMatch } from "./types"
 
 function labelFilterSql(labelMatch: LabelMatch, labelParam: string) {
@@ -116,11 +115,8 @@ export async function getPostsCount(userId: string, labelIds: number[] = [], lab
 
 export async function getPostsForUser(
   userId: string,
-  { labelIds = [], labelMatch = "any", limit, offset, sort, searchQuery }: { labelIds?: number[]; labelMatch?: LabelMatch; limit: number; offset: number; sort: PostSort; searchQuery?: string },
+  { labelIds = [], labelMatch = "any", limit, offset, searchQuery }: { labelIds?: number[]; labelMatch?: LabelMatch; limit: number; offset: number; searchQuery?: string },
 ): Promise<PostWithRelations[]> {
-  const orderBy = sort === "label"
-    ? "labels.first_label ASC NULLS LAST, p.created_at DESC, p.id DESC"
-    : "p.created_at DESC, p.id DESC"
   const { rows } = await query<PostWithRelations>(
     `SELECT p.id, p.user_id, p.platform, p.platform_post_id, p.post_url, p.caption,
             p.author_handle, p.author_name,
@@ -135,8 +131,7 @@ export async function getPostsForUser(
      LEFT JOIN categories c ON c.id = p.category_id
      LEFT JOIN LATERAL (
        SELECT json_agg(json_build_object('id', label.id, 'name', label.name, 'system', label.auto_created)
-         ORDER BY label.name) AS labels,
-              min(label.name) AS first_label
+         ORDER BY label.name) AS labels
        FROM post_labels pl
        JOIN categories label ON label.id = pl.label_id
        WHERE pl.post_id = p.id
@@ -149,7 +144,7 @@ export async function getPostsForUser(
          coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
          coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
        ) @@ websearch_to_tsquery('simple', $3))
-     ORDER BY ${orderBy}
+     ORDER BY p.created_at DESC, p.id DESC
      LIMIT $4 OFFSET $5`,
     [userId, labelIds, searchQuery ?? null, limit, offset],
   )
