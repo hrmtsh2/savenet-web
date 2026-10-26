@@ -10,17 +10,46 @@ const defaultEmbeddingDimensions = 768
 
 export interface CallMeter {
   ocr: number
+  transcription: number
   embedding: number
   synthesis: number
   thumbnailPick: number
 }
 
 export function createCallMeter(): CallMeter {
-  return { ocr: 0, embedding: 0, synthesis: 0, thumbnailPick: 0 }
+  return { ocr: 0, transcription: 0, embedding: 0, synthesis: 0, thumbnailPick: 0 }
 }
 
 export function totalCalls(meter: CallMeter): number {
-  return meter.ocr + meter.embedding + meter.synthesis + meter.thumbnailPick
+  return meter.ocr + meter.transcription + meter.embedding + meter.synthesis + meter.thumbnailPick
+}
+
+export async function transcribeVideo(videoUrl: string, meter?: CallMeter): Promise<string> {
+  try {
+    if (meter) meter.transcription += 1
+    const response = await fetch(videoUrl, { signal: AbortSignal.timeout(30_000) })
+    if (!response.ok || !response.body) throw new Error(`video download returned ${response.status}`)
+    const contentType = response.headers.get("content-type")?.split(";")[0].trim() || "video/mp4"
+    if (!contentType.startsWith("video/")) throw new Error(`video has unsupported content type ${contentType}`)
+    const contentLength = Number(response.headers.get("content-length") || 0)
+    if (contentLength > 50 * 1024 * 1024) throw new Error("video is too large to transcribe")
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength === 0 || bytes.byteLength > 50 * 1024 * 1024) throw new Error("video has invalid size")
+    const { text } = await generateText({
+      model: defaultTextModel,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: "Transcribe all intelligible spoken audio in this video. Return only the transcript. If there is no speech, return an empty string." },
+          { type: "file", data: bytes, mediaType: contentType },
+        ],
+      }],
+    })
+    return text.trim()
+  } catch (error) {
+    console.log("[savenet] video transcription failed:", (error as Error).message)
+    return ""
+  }
 }
 
 export async function ocrImage(imageUrl: string, meter?: CallMeter): Promise<string> {

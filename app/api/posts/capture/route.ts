@@ -1,5 +1,5 @@
 import { authenticateRequest } from "@/lib/auth"
-import { createCallMeter, embedText, ocrImage, pickThumbnail, totalCalls } from "@/lib/ai"
+import { createCallMeter, embedText, ocrImage, pickThumbnail, totalCalls, transcribeVideo } from "@/lib/ai"
 import { fetchXOembed } from "@/lib/capture"
 import { query, toVectorLiteral } from "@/lib/db"
 import { attachExistingLabels, attachLabels, sourceLabelFor } from "@/lib/queries"
@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   try {
     const caption = body.caption ?? ""
     let scopeText = typeof body.raw?.scopeText === "string" ? body.raw.scopeText : undefined
+    const comments = Array.isArray(body.raw?.comments)
+      ? body.raw.comments.filter((comment): comment is { author?: string; text: string } => typeof comment?.text === "string")
+      : []
     let thumbnailUrl = body.thumbnailUrl ?? ""
     const candidateImages = Array.isArray(body.raw?.candidateImages)
       ? body.raw.candidateImages.filter((url): url is string => typeof url === "string")
@@ -86,10 +89,18 @@ export async function POST(req: Request) {
     }
 
     const summary = caption || scopeText || null
-    let enrichedText = `${caption} ${scopeText ?? ""}`.trim()
+    const commentsText = comments.map((comment) => `${comment.author ? `@${comment.author}: ` : ""}${comment.text}`).join(" ")
+    let enrichedText = `${caption} ${scopeText ?? ""} ${commentsText}`.trim()
+    const videoUrl = typeof body.raw?.videoUrl === "string" ? body.raw.videoUrl : ""
+    let transcript = ""
+    if (videoUrl) {
+      transcript = await transcribeVideo(videoUrl, meter)
+      if (transcript) enrichedText = `${enrichedText}\n\nTranscript:\n${transcript}`.trim()
+    }
+    let extractedImageText = ""
     if (thumbnailUrl) {
-      const ocrText = await ocrImage(thumbnailUrl, meter)
-      if (ocrText) enrichedText = `${enrichedText} ${ocrText}`.trim()
+      extractedImageText = await ocrImage(thumbnailUrl, meter)
+      if (extractedImageText) enrichedText = `${enrichedText} ${extractedImageText}`.trim()
     }
     const embedding = await embedText(enrichedText, meter)
 
@@ -98,9 +109,19 @@ export async function POST(req: Request) {
        SET summary = $1, enriched_text = $2, embedding = $3::vector,
            thumbnail_url = COALESCE($4, thumbnail_url),
            thumbnail_s3_key = COALESCE($5, thumbnail_s3_key),
+           raw = COALESCE(raw, '{}'::jsonb) || $8::jsonb,
            updated_at = now()
        WHERE id = $6 AND user_id = $7`,
-      [summary, enrichedText, toVectorLiteral(embedding), thumbnailUrl || null, thumbnailStored ? storedThumbnailKey : null, postId, userId],
+      [summary, enrichedText, toVectorLiteral(embedding), thumbnailUrl || null, thumbnailStored ? storedThumbnailKey : null, postId, userId, JSON.stringify({
+        extractedImageText,
+        ...(transcript ? { transcript } : {}),
+      })],
+    )
+    await query(
+      `INSERT INTO post_enrichment_jobs (post_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (post_id) DO UPDATE SET status = 'queued', error_message = NULL, updated_at = now()`,
+      [postId, userId],
     )
 
     return Response.json({

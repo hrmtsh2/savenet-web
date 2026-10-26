@@ -146,6 +146,8 @@ export interface CapturePayload {
     scopeText?: string
     tweetTimestamp?: string
     candidateImages?: string[]
+    comments?: Array<{ author?: string; text: string }>
+    videoUrl?: string
     [key: string]: unknown
   }
 }

@@ -52,7 +52,7 @@ The worker only schedules and invokes protected routes, so the same app can move
 
 ### Thumbnail storage configuration
 
-Apply [`scripts/011-add-thumbnail-storage.sql`](./scripts/011-add-thumbnail-storage.sql) and [`scripts/012-add-platform-checks.sql`](./scripts/012-add-platform-checks.sql) after deploying the schema changes. When deploying the infrastructure stack, set `AWS_RUNTIME_ROLE_ARN` in the CDK process environment to the Vercel runtime role ARN, then set the resulting `ThumbnailBucketName` output as `THUMBNAIL_S3_BUCKET` in the web app. The web app also uses `AWS_RUNTIME_ROLE_ARN` to assume the same role at runtime. The bucket remains private; the web runtime needs `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` permissions on it.
+Apply [`scripts/011-add-thumbnail-storage.sql`](./scripts/011-add-thumbnail-storage.sql), [`scripts/012-add-platform-checks.sql`](./scripts/012-add-platform-checks.sql), and [`scripts/013-add-post-enrichment-jobs.sql`](./scripts/013-add-post-enrichment-jobs.sql) after deploying the schema changes. When deploying the infrastructure stack, set `AWS_RUNTIME_ROLE_ARN` in the CDK process environment to the Vercel runtime role ARN, then set the resulting `ThumbnailBucketName` output as `THUMBNAIL_S3_BUCKET` in the web app. The web app also uses `AWS_RUNTIME_ROLE_ARN` to assume the same role at runtime. The bucket remains private; the web runtime needs `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` permissions on it. New captures are automatically queued for entity extraction and web enrichment by the worker. Instagram reels and videos also pass their API media URL to the worker for best-effort audio transcription; the video is not stored.
 
 ## Project structure
 

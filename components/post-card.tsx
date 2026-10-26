@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import Image from "next/image"
 import { ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
 import { toast } from "sonner"
@@ -55,26 +55,16 @@ function platformLabel(platform: Platform) {
   return platform
 }
 
-function useIsTruncated(content: string) {
-  const ref = useRef<HTMLParagraphElement>(null)
-  const [isTruncated, setIsTruncated] = useState(false)
-
-  useEffect(() => {
-    const element = ref.current
-    if (!element) return
-    const update = () => setIsTruncated(element.scrollHeight > element.clientHeight + 1)
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [content])
-
-  return { ref, isTruncated }
-}
-
 function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations; caption: string; summary: string }) {
   const [open, setOpen] = useState(false)
-  const detailText = summary && summary !== caption ? summary : caption
+  const [showExtractedInfo, setShowExtractedInfo] = useState(false)
+  const raw = post.raw ?? {}
+  const extractedImageText = typeof raw.extractedImageText === "string" ? raw.extractedImageText.trim() : ""
+  const comments = Array.isArray(raw.comments)
+    ? raw.comments.filter((comment): comment is { author?: string; text: string } => (
+        typeof comment === "object" && comment !== null && typeof comment.text === "string" && comment.text.trim().length > 0
+      ))
+    : []
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -83,9 +73,9 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
       >
         More
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-xl overflow-y-auto p-0 sm:max-w-xl">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-xl flex-col overflow-hidden p-0 sm:max-w-xl">
         {post.thumbnail_url ? (
-          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-t-xl bg-muted">
+          <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-t-xl bg-muted">
             <Image
               src={post.thumbnail_url}
               alt={caption ? `Thumbnail for: ${caption.slice(0, 80)}` : "Saved post thumbnail"}
@@ -96,7 +86,8 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
             />
           </div>
         ) : null}
-        <div className="flex flex-col gap-4 p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-4 p-5">
           <DialogHeader className="pr-8">
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="gap-1.5 font-normal">
@@ -112,11 +103,53 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
               {post.labels.map((label) => <Badge key={label.id} variant="outline" className="font-normal">{label.name}</Badge>)}
             </div>
           ) : null}
-          {caption && summary !== caption ? <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed">{caption}</p> : null}
-          {detailText ? <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{detailText}</p> : null}
-          <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-            View original <ExternalLink className="h-4 w-4" />
-          </a>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Post description</h3>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+              {caption || summary || "No description captured."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => setShowExtractedInfo((visible) => !visible)}
+          >
+            {showExtractedInfo ? "Hide extracted info" : "Show extracted info"}
+          </Button>
+            {showExtractedInfo ? (
+              <div className="flex max-h-80 flex-col gap-5 overflow-y-auto rounded-lg border bg-muted/30 p-4">
+              <DialogDescription className="text-sm leading-relaxed">
+                SaveNet captures all possible relevant information about a saved post. This includes:
+              </DialogDescription>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Text extracted from images in the post</h3>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                  {extractedImageText || "No text was extracted from the images."}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Top comments</h3>
+                {comments.length > 0 ? (
+                  <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm leading-relaxed text-muted-foreground">
+                    {comments.slice(0, 10).map((comment, index) => (
+                      <li key={`${comment.author || "comment"}-${index}`}>
+                        {comment.author ? <span className="font-medium text-foreground">@{comment.author.replace(/^@/, "")}: </span> : null}
+                        {comment.text}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-sm leading-relaxed text-muted-foreground">No comments were captured.</p>
+                )}
+              </div>
+              </div>
+            ) : null}
+            <a href={post.post_url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              View original <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -130,9 +163,6 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
   const [pending, startTransition] = useTransition()
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(post.thumbnail_url) && !imageFailed
-  const captionClamp = useIsTruncated(caption)
-  const summaryClamp = useIsTruncated(summary)
-  const hasTruncatedDescription = captionClamp.isTruncated || summaryClamp.isTruncated
 
   function onDelete(fd: FormData) {
     startTransition(async () => {
@@ -178,15 +208,15 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
           </div>
         ) : null}
 
-        {caption ? <p ref={captionClamp.ref} className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">{caption}</p> : null}
+        {caption ? <p className="line-clamp-2 text-sm font-medium leading-relaxed text-foreground">{caption}</p> : null}
 
         {summary ? (
-          <p ref={summaryClamp.ref} className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{summary}</p>
+          <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{summary}</p>
         ) : (
           !caption && <p className="text-sm italic text-muted-foreground">No description yet.</p>
         )}
 
-        {hasTruncatedDescription ? <PostDetailsDialog post={post} caption={caption} summary={summary} /> : null}
+        <PostDetailsDialog post={post} caption={caption} summary={summary} />
 
         {post.entity_name ? (
           <div className="flex items-center gap-1.5 text-xs text-foreground">
