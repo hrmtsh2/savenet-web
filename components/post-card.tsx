@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import Image from "next/image"
-import { ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
+import { Download, ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -66,6 +66,52 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
       ))
     : []
 
+  function exportPostAsJson() {
+    try {
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        post: {
+          id: post.id,
+          platform: post.platform,
+          platformPostId: post.platform_post_id,
+          postUrl: post.post_url,
+          sourceUrl: post.source_url,
+          caption: post.caption,
+          authorHandle: post.author_handle,
+          authorName: post.author_name,
+          thumbnailUrl: post.thumbnail_url,
+          mediaType: post.media_type,
+          capturedAt: post.captured_at,
+          createdAt: post.created_at,
+          updatedAt: post.updated_at,
+          summary: post.summary,
+          enrichedText: post.enriched_text,
+          labels: post.labels,
+          entity: post.entity_id
+            ? {
+                id: post.entity_id,
+                name: post.entity_name,
+                location: post.entity_location,
+              }
+            : null,
+          furtherReading: post.further_reading,
+          raw: post.raw,
+        },
+      }
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `savenet-post-${post.id}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+      toast.success("Post exported as JSON")
+    } catch (error) {
+      console.error("Failed to export post as JSON", error)
+      toast.error("Could not export this post")
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
@@ -117,6 +163,10 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
             onClick={() => setShowExtractedInfo((visible) => !visible)}
           >
             {showExtractedInfo ? "Hide extracted info" : "Show extracted info"}
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="w-fit" onClick={exportPostAsJson}>
+            <Download className="h-4 w-4" />
+            Export as JSON
           </Button>
             {showExtractedInfo ? (
               <div className="flex max-h-80 flex-col gap-5 overflow-y-auto rounded-lg border bg-muted/30 p-4">
