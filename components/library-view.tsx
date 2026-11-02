@@ -2,7 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ChevronLeft, ChevronRight, Inbox, ListFilter, Search, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, Inbox, ListFilter, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PostCard } from "@/components/post-card"
@@ -152,7 +152,18 @@ export function LibraryView({
               </SelectContent>
             </Select>
           ) : null}
-          {total > 0 ? <AddPostsToLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} /> : null}
+          {total > 0 ? (
+            <>
+              <AddPostsToLabelDialog categories={categories} sourceLabelIds={selectedLabelIds} labelMatch={labelMatch} searchQuery={searchQuery} count={total} />
+              <ExportFilteredPostsDialog
+                count={total}
+                selectedLabels={selectedLabels.map((label) => label.name)}
+                labelMatch={labelMatch}
+                searchQuery={searchQuery}
+                labelIds={selectedLabelIds}
+              />
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -183,6 +194,97 @@ export function LibraryView({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function ExportFilteredPostsDialog({
+  count,
+  selectedLabels,
+  labelMatch,
+  searchQuery,
+  labelIds,
+}: {
+  count: number
+  selectedLabels: string[]
+  labelMatch: LabelMatch
+  searchQuery?: string
+  labelIds: number[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState<"idle" | "generating" | "downloading" | "done" | "error">("idle")
+
+  const scope = selectedLabels.length === 0
+    ? "all posts"
+    : labelMatch === "all"
+      ? `posts with all of the labels ${selectedLabels.join(", ")}`
+      : `posts with any of the labels ${selectedLabels.join(", ")}`
+  const search = searchQuery ? ` matching the search keywords “${searchQuery}”` : ""
+  const pending = status === "generating" || status === "downloading"
+
+  async function exportPosts() {
+    setStatus("generating")
+    try {
+      const params = new URLSearchParams()
+      if (labelIds.length) params.set("labels", labelIds.join(","))
+      if (labelMatch === "all" && labelIds.length > 1) params.set("match", "all")
+      if (searchQuery) params.set("q", searchQuery)
+      const response = await fetch(`/api/posts/export?${params.toString()}`)
+      if (!response.ok) throw new Error(`Export failed with status ${response.status}`)
+      const data = await response.blob()
+      setStatus("downloading")
+      const url = URL.createObjectURL(data)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = "savenet-library-export.json"
+      link.click()
+      URL.revokeObjectURL(url)
+      setStatus("done")
+    } catch (error) {
+      console.error("Failed to export filtered posts", error)
+      toast.error("Could not export the current library view")
+      setStatus("error")
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!pending) {
+          setOpen(nextOpen)
+          if (!nextOpen) setStatus("idle")
+        }
+      }}
+    >
+      <DialogTrigger render={<Button type="button" variant="outline" size="sm" disabled={pending} />}>
+        <Download className="h-3.5 w-3.5" />
+        Export as JSON
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Export library view as JSON?</DialogTitle>
+          <DialogDescription>
+            Download all extracted post data for {scope}{search}. This includes descriptions, OCR, comments, transcripts, enrichment, labels, and source links.
+          </DialogDescription>
+        </DialogHeader>
+        {pending || status === "done" || status === "error" ? (
+          <div className="space-y-2" aria-live="polite">
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div className={`h-full transition-all ${status === "error" ? "bg-destructive" : "bg-primary"}`} style={{ width: status === "generating" ? "55%" : status === "downloading" ? "85%" : "100%" }} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {status === "generating" ? `Generating JSON for ${count} posts...` : status === "downloading" ? "Preparing download..." : status === "done" ? "Download started." : "Export failed. Please try again."}
+            </p>
+          </div>
+        ) : null}
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="ghost" disabled={pending} />}>Cancel</DialogClose>
+          <Button type="button" onClick={exportPosts} disabled={pending || status === "done"}>
+            {pending ? "Exporting..." : status === "done" ? "Exported" : "Download JSON"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

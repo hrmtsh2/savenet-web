@@ -68,6 +68,7 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
 
   function exportPostAsJson() {
     try {
+      const exportRaw = Object.fromEntries(Object.entries(post.raw ?? {}).filter(([key]) => key !== "candidateImages"))
       const exportData = {
         exportedAt: new Date().toISOString(),
         post: {
@@ -95,7 +96,7 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
               }
             : null,
           furtherReading: post.further_reading,
-          raw: post.raw,
+          raw: exportRaw,
         },
       }
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
