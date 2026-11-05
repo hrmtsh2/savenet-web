@@ -251,6 +251,27 @@ export async function deletePost(formData: FormData) {
   return { ok: true as const }
 }
 
+export async function retryPostEnrichment(postId: number) {
+  const userId = await requireUserId()
+  const id = Number(postId)
+  if (!Number.isInteger(id) || id < 1) return { error: "Post not found." }
+
+  const result = await query(
+    `INSERT INTO post_enrichment_jobs (post_id, user_id, status, error_message, completed_at)
+     SELECT id, user_id, 'queued', NULL, NULL
+     FROM posts
+     WHERE id = $1 AND user_id = $2
+     ON CONFLICT (post_id) DO UPDATE
+     SET status = 'queued', error_message = NULL, completed_at = NULL, updated_at = now()
+     RETURNING post_id`,
+    [id, userId],
+  )
+  if (!result.rows[0]) return { error: "Post not found." }
+
+  revalidatePath("/library")
+  return { ok: true as const }
+}
+
 export async function addLabelToPosts(input: { labelId: number; postIds: number[] }) {
   const userId = await requireUserId()
   const labelId = Number(input.labelId)

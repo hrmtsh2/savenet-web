@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, type MouseEvent } from "react"
 import Image from "next/image"
-import { Download, ExternalLink, MapPin, Trash2, Bookmark, BookOpen } from "lucide-react"
+import { Download, ExternalLink, MapPin, RefreshCw, Trash2, Bookmark, BookOpen } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { deletePost } from "@/app/actions"
+import { deletePost, retryPostEnrichment } from "@/app/actions"
 import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
 import type { CategoryWithCount, Platform, PostWithRelations } from "@/lib/types"
 
@@ -55,9 +55,21 @@ function platformLabel(platform: Platform) {
   return platform
 }
 
-function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations; caption: string; summary: string }) {
-  const [open, setOpen] = useState(false)
+function PostDetailsDialog({
+  post,
+  caption,
+  summary,
+  open,
+  onOpenChange,
+}: {
+  post: PostWithRelations
+  caption: string
+  summary: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const [showExtractedInfo, setShowExtractedInfo] = useState(false)
+  const [retrying, startRetry] = useTransition()
   const raw = post.raw ?? {}
   const extractedImageText = typeof raw.extractedImageText === "string" ? raw.extractedImageText.trim() : ""
   const comments = Array.isArray(raw.comments)
@@ -113,8 +125,19 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
     }
   }
 
+  function retryExtraction() {
+    startRetry(async () => {
+      const result = await retryPostEnrichment(post.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Post enrichment queued for retry")
+    })
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
         render={<button type="button" className="w-fit text-xs font-medium text-primary hover:underline" />}
       >
@@ -169,6 +192,10 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
             <Download className="h-4 w-4" />
             Export as JSON
           </Button>
+          <Button type="button" variant="outline" size="sm" className="w-fit" onClick={retryExtraction} disabled={retrying}>
+            <RefreshCw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
+            {retrying ? "Queuing retry..." : "Retry extraction"}
+          </Button>
             {showExtractedInfo ? (
               <div className="flex max-h-80 flex-col gap-5 overflow-y-auto rounded-lg border bg-muted/30 p-4">
               <DialogDescription className="text-sm leading-relaxed">
@@ -210,7 +237,8 @@ function PostDetailsDialog({ post, caption, summary }: { post: PostWithRelations
 export function PostCard({ post, categories }: { post: PostWithRelations; categories: CategoryWithCount[] }) {
   const caption = post.caption?.trim() || ""
   const summary = post.summary?.trim() || ""
-  const [open, setOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(post.thumbnail_url) && !imageFailed
@@ -220,12 +248,18 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
       const res = await deletePost(fd)
       if (res?.error) toast.error(res.error)
       else toast.success("Post deleted")
-      setOpen(false)
+      setDeleteOpen(false)
     })
   }
 
+  function handleDoubleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    if (target.closest("a, button, input, select, textarea")) return
+    setDetailsOpen(true)
+  }
+
   return (
-    <Card className="flex flex-col gap-0 overflow-hidden p-0">
+    <Card className="flex cursor-pointer flex-col gap-0 overflow-hidden p-0" onDoubleClick={handleDoubleClick}>
       {showImage ? (
         <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
           <Image
@@ -267,7 +301,7 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
           !caption && <p className="text-sm italic text-muted-foreground">No description yet.</p>
         )}
 
-        <PostDetailsDialog post={post} caption={caption} summary={summary} />
+        <PostDetailsDialog post={post} caption={caption} summary={summary} open={detailsOpen} onOpenChange={setDetailsOpen} />
 
         {post.entity_name ? (
           <div className="flex items-center gap-1.5 text-xs text-foreground">
@@ -297,7 +331,7 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
           </a>
           <div className="flex items-center gap-1">
             <AddPostsToLabelDialog categories={categories} postIds={[post.id]} count={1} excludedLabelIds={post.labels.map((label) => label.id)} compact checklist />
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
               <DialogTrigger
                 render={
                   <Button
