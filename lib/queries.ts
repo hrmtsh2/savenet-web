@@ -113,6 +113,27 @@ export async function getPostsCount(userId: string, labelIds: number[] = [], lab
   return Number(rows[0]?.count ?? "0")
 }
 
+export async function getLibraryVersion(
+  userId: string,
+  labelIds: number[] = [],
+  labelMatch: LabelMatch = "any",
+  searchQuery?: string,
+): Promise<string> {
+  const { rows } = await query<{ count: string; latest_updated_at: string | null }>(
+    `SELECT count(*)::text AS count, max(p.updated_at)::text AS latest_updated_at
+     FROM posts p
+     WHERE p.user_id = $1
+       AND ${labelFilterSql(labelMatch, "$2")}
+       AND ($3::text IS NULL OR to_tsvector('simple',
+         coalesce(p.caption, '') || ' ' || coalesce(p.author_handle, '') || ' ' ||
+         coalesce(p.author_name, '') || ' ' || coalesce(p.summary, '') || ' ' ||
+         coalesce(p.enriched_text, '') || ' ' || coalesce(p.source_url, '') || ' ' || coalesce(p.post_url, '')
+       ) @@ websearch_to_tsquery('simple', $3))`,
+    [userId, labelIds, searchQuery ?? null],
+  )
+  return `${rows[0]?.count ?? "0"}:${rows[0]?.latest_updated_at ?? ""}`
+}
+
 export async function getPostsForUser(
   userId: string,
   { labelIds = [], labelMatch = "any", limit, offset, searchQuery }: { labelIds?: number[]; labelMatch?: LabelMatch; limit: number; offset: number; searchQuery?: string },

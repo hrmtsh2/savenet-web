@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ChevronLeft, ChevronRight, Download, Inbox, ListFilter, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -50,6 +50,41 @@ export function LibraryView({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+  const libraryVersion = useRef<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const params = new URLSearchParams()
+    if (selectedLabelIds.length) params.set("labels", selectedLabelIds.join(","))
+    if (labelMatch === "all" && selectedLabelIds.length > 1) params.set("match", "all")
+    if (searchQuery) params.set("q", searchQuery)
+    const endpoint = `/api/posts/library-version?${params.toString()}`
+
+    async function checkForChanges() {
+      if (document.visibilityState !== "visible") return
+      try {
+        const response = await fetch(endpoint, { cache: "no-store" })
+        if (!response.ok) return
+        const data = await response.json() as { version?: string }
+        if (!active || !data.version) return
+        if (libraryVersion.current === null) {
+          libraryVersion.current = data.version
+          return
+        }
+        if (libraryVersion.current !== data.version) {
+          libraryVersion.current = data.version
+          router.refresh()
+        }
+      } catch {}
+    }
+
+    void checkForChanges()
+    const interval = window.setInterval(() => { void checkForChanges() }, 10000)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [router, selectedLabelIds, labelMatch, searchQuery])
 
   const navigate = useCallback((changes: { labelIds?: number[]; labelMatch?: LabelMatch; page?: number; query?: string }) => {
     const params = new URLSearchParams(searchParams.toString())
