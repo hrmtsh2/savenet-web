@@ -123,7 +123,7 @@ export function AddPostsToLabelDialog({
         }
       >
         <Tag className="h-3.5 w-3.5" />
-        {compact ? "Add label" : "Add posts to label"}
+        {compact ? "Manage labels" : "Add posts to label"}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

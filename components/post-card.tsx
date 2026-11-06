@@ -1,8 +1,9 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useState, useTransition, type MouseEvent } from "react"
 import Image from "next/image"
-import { Download, ExternalLink, MapPin, RefreshCw, Trash2, Bookmark, BookOpen } from "lucide-react"
+import { Download, ExternalLink, MapPin, RefreshCw, Trash2, Bookmark, BookOpen, X } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { deletePost, retryPostEnrichment } from "@/app/actions"
+import { deletePost, retryPostEnrichment, setPostLabels } from "@/app/actions"
 import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
 import type { CategoryWithCount, Platform, PostWithRelations } from "@/lib/types"
 
@@ -235,6 +236,7 @@ function PostDetailsDialog({
 }
 
 export function PostCard({ post, categories }: { post: PostWithRelations; categories: CategoryWithCount[] }) {
+  const router = useRouter()
   const caption = post.caption?.trim() || ""
   const summary = post.summary?.trim() || ""
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -242,6 +244,18 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
   const [pending, startTransition] = useTransition()
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(post.thumbnail_url) && !imageFailed
+
+  function removeLabel(labelId: number, labelName: string) {
+    startTransition(async () => {
+      const result = await setPostLabels({ postId: post.id, labelIds: post.labels.filter((label) => label.id !== labelId).map((label) => label.id) })
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(`Removed ${labelName}`)
+      router.refresh()
+    })
+  }
 
   function onDelete(fd: FormData) {
     startTransition(async () => {
@@ -288,7 +302,21 @@ export function PostCard({ post, categories }: { post: PostWithRelations; catego
         {post.labels.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {post.labels.map((label) => (
-              <Badge key={label.id} variant="outline" className="font-normal">{label.name}</Badge>
+              <Badge key={label.id} variant="outline" className="gap-1 pr-1 font-normal">
+                {label.name}
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    removeLabel(label.id, label.name)
+                  }}
+                  disabled={pending}
+                  aria-label={`Remove ${label.name} label`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
             ))}
           </div>
         ) : null}
