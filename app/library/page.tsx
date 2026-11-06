@@ -19,11 +19,15 @@ export default async function LibraryPage({
   const searchQuery = params.q?.trim().slice(0, 200) || undefined
   const requestedPage = Number(params.page)
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
-  const [categories, total, allPostsCount] = await Promise.all([
+  const allPostsCountPromise = selectedLabelIds.length === 0 && !searchQuery
+    ? Promise.resolve<number | null>(null)
+    : getPostsCount(userId)
+  const [categories, total, queriedAllPostsCount] = await Promise.all([
     getCategoriesWithCounts(userId),
     getPostsCount(userId, selectedLabelIds, labelMatch, searchQuery),
-    getPostsCount(userId),
+    allPostsCountPromise,
   ])
+  const allPostsCount = queriedAllPostsCount ?? total
   const pageCount = Math.max(1, Math.ceil(total / savesPaginationPageSize))
   const currentPage = Math.min(page, pageCount)
   const posts = await getPostsForUser(userId, {
