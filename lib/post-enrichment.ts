@@ -4,6 +4,7 @@ import { z } from "zod"
 import { query, toVectorLiteral } from "@/lib/db"
 import { embedText } from "@/lib/ai"
 import { finishAiRun, resolveTextModel, startAiRun } from "@/lib/ai-settings"
+import { trackServerAnalytics } from "@/lib/analytics-server"
 
 const enrichmentSchema = z.object({
   entities: z.array(z.object({
@@ -105,6 +106,10 @@ export async function processNextPostEnrichment() {
       [job.post_id],
     )
     await finishAiRun({ id: telemetryId, status: "succeeded", startedAt, usage: result.usage })
+    void trackServerAnalytics("enrichment_completed", job.user_id, {
+      has_research: sources.length > 0,
+      entity_count: output.entities.length,
+    })
     return { processed: true as const, postId: job.post_id }
   } catch (error) {
     if (telemetryId) await finishAiRun({ id: telemetryId, status: "failed", startedAt, error })
@@ -112,6 +117,7 @@ export async function processNextPostEnrichment() {
       "UPDATE post_enrichment_jobs SET status = 'failed', error_message = $2, updated_at = now() WHERE post_id = $1",
       [job.post_id, error instanceof Error ? error.message.slice(0, 500) : "Enrichment failed"],
     )
+    void trackServerAnalytics("enrichment_failed", job.user_id, {})
     return { processed: true as const, postId: job.post_id, failed: true as const }
   }
 }

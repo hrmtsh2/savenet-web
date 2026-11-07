@@ -9,6 +9,7 @@ import { PostCard } from "@/components/post-card"
 import { AddPostsToLabelDialog } from "@/components/add-posts-to-label-dialog"
 import { deleteFilteredPosts } from "@/app/actions"
 import { toast } from "sonner"
+import { trackAnalyticsEvent } from "@/lib/analytics"
 import {
   Dialog,
   DialogClose,
@@ -127,6 +128,11 @@ export function LibraryView({
           event.preventDefault()
           const formData = new FormData(event.currentTarget)
           const query = String(formData.get("q") || "")
+          trackAnalyticsEvent("library_searched", {
+            has_keywords: Boolean(query.trim()),
+            keyword_length: query.trim().length,
+            label_count: selectedLabelIds.length,
+          })
           navigate({ labelIds: selectedLabelIds, query })
         }}
       >
@@ -165,7 +171,13 @@ export function LibraryView({
           <LabelFilterDialog
             categories={categories}
             selectedLabelIds={selectedLabelIds}
-            onApply={(labelIds) => navigate({ labelIds })}
+            onApply={(labelIds) => {
+              trackAnalyticsEvent("library_filtered", {
+                label_count: labelIds.length,
+                label_match: labelMatch,
+              })
+              navigate({ labelIds })
+            }}
           />
           {selectedLabels.map((label) => (
             <LabelButton
@@ -274,6 +286,11 @@ function ExportFilteredPostsDialog({
       link.click()
       URL.revokeObjectURL(url)
       setStatus("done")
+      trackAnalyticsEvent("library_exported", {
+        post_count: count,
+        label_count: labelIds.length,
+        has_search: Boolean(searchQuery),
+      })
     } catch (error) {
       console.error("Failed to export filtered posts", error)
       toast.error("Could not export the current library view")

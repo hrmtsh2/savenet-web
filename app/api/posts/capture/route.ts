@@ -5,6 +5,7 @@ import { query, toVectorLiteral } from "@/lib/db"
 import { attachExistingLabels, attachLabels, sourceLabelFor } from "@/lib/queries"
 import { queueCaptureEntityAgents } from "@/lib/agents"
 import { storeThumbnail, thumbnailKey } from "@/lib/thumbnails"
+import { trackServerAnalytics } from "@/lib/analytics-server"
 import type { CapturePayload } from "@/lib/types"
 
 export const maxDuration = 60
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
       [postId, userId],
     )
 
+    void trackServerAnalytics("post_captured", userId, {
+      platform: body.platform,
+      has_labels: Array.isArray(body.labelIds) && body.labelIds.length > 0,
+    })
     return Response.json({
       id: postId,
       labels: [sourceLabelFor(body.platform), ...(collectionName ? [collectionName] : [])],
