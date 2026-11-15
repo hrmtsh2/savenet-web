@@ -119,6 +119,15 @@ export interface SynthesisResult {
   citedPostIds: number[]
 }
 
+function removePostReferences(text: string) {
+  return text
+    .replace(/\[POST_REF:\d+\]/g, "")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\bPost\s+\d+\b/gi, "saved post")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+}
+
 export async function synthesizeRecommendation(
   input: {
     userId: string
@@ -132,7 +141,7 @@ export async function synthesizeRecommendation(
   if (meter) meter.synthesis += 1
   const candidateBlocks = input.candidates.map((candidate) => {
     const lines = [
-      `[POST_REF:${candidate.id}] ${candidate.entity_name || candidate.summary?.slice(0, 60) || `Post ${candidate.id}`} [${candidate.platform}]`,
+      `[POST_REF:${candidate.id}] ${candidate.entity_name || candidate.summary?.slice(0, 60) || "Saved post"} [${candidate.platform}]`,
       candidate.captured_at ? `Saved on: ${new Date(candidate.captured_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "",
       candidate.summary ? `Summary: ${candidate.summary}` : candidate.enriched_text ? `Details: ${candidate.enriched_text}` : "",
       candidate.entity_name ? `Entity: ${candidate.entity_name}${candidate.entity_location ? `, ${candidate.entity_location}` : ""}` : "",
@@ -167,7 +176,10 @@ export async function synthesizeRecommendation(
     })
     await finishAiRun({ id: runId, status: "succeeded", startedAt, usage: result.usage })
     const validIds = new Set(input.candidates.map((candidate) => candidate.id))
-    return { reply: result.experimental_output.reply, citedPostIds: result.experimental_output.cited_post_ids.filter((id) => validIds.has(id)) }
+    return {
+      reply: removePostReferences(result.experimental_output.reply),
+      citedPostIds: result.experimental_output.cited_post_ids.filter((id) => validIds.has(id)),
+    }
   } catch (error) {
     await finishAiRun({ id: runId, status: "failed", startedAt, error })
     throw error

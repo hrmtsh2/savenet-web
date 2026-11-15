@@ -42,6 +42,15 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]!)
 }
 
+function removePostReferences(text: string) {
+  return text
+    .replace(/\[POST_REF:\d+\]/g, "")
+    .replace(/\[\d+\]/g, "")
+    .replace(/\bPost\s+\d+\b/gi, "saved post")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+}
+
 function digestLinks(posts: DigestPost[], referencedIds: number[]) {
   const byId = new Map(posts.map((post) => [post.id, post]))
   const referenced = [...new Set(referencedIds)].map((id) => byId.get(id)).filter((post): post is DigestPost => Boolean(post))
@@ -89,7 +98,7 @@ async function researchDigest(config: DigestConfig, posts: DigestPost[]): Promis
       prompt: [
         `User's digest instructions:\n${config.instructions}`,
         "Saved posts:",
-        ...posts.map((post) => `[${post.id}] ${post.summary || post.caption || "Untitled"}\n${post.post_url}`),
+        ...posts.map((post) => `[POST_REF:${post.id}] ${post.summary || post.caption || "Untitled"}\n${post.post_url}`),
       ].join("\n\n"),
     })
     await finishAiRun({ id: telemetryId, status: "succeeded", startedAt, usage: result.usage })
@@ -153,9 +162,9 @@ export async function sendDigest(config: DigestConfig) {
     const result = await generateText({
       model: model.model,
       experimental_output: Output.object({ schema: digestSchema }),
-      system: `Write a concise personal SaveNet digest using only the supplied saved posts. Follow the user's instructions as the primary direction for the digest's focus and format. ${config.instructions}`,
+      system: `Write a concise personal SaveNet digest using only the supplied saved posts. Follow the user's instructions as the primary direction for the digest's focus and format. Never include post IDs, POST_REF markers, or bracketed numeric references in the digest. Refer to posts by their names or descriptions and include relevant links when useful. ${config.instructions}`,
       prompt: [
-        posts.map((post) => `[${post.id}] ${post.summary || post.caption || "Untitled"}\n${post.post_url}`).join("\n\n") || "No posts were saved in this period.",
+        posts.map((post) => `[POST_REF:${post.id}] ${post.summary || post.caption || "Untitled"}\n${post.post_url}`).join("\n\n") || "No posts were saved in this period.",
         sources.length ? `Web research sources:\n${sources.map((source) => `- ${source.title}: ${source.url}`).join("\n")}` : "",
       ].filter(Boolean).join("\n\n"),
     })
@@ -164,8 +173,8 @@ export async function sendDigest(config: DigestConfig) {
     const referenced = result.experimental_output.referenced_post_ids.filter((id) => validIds.has(id))
     const links = digestLinks(posts, referenced)
     const furtherReading = researchLinks(sources)
-    const html = `${result.experimental_output.html}${links.html}${furtherReading.html}`
-    const text = `${result.experimental_output.text}${links.text}${furtherReading.text}`
+    const html = `${removePostReferences(result.experimental_output.html)}${links.html}${furtherReading.html}`
+    const text = `${removePostReferences(result.experimental_output.text)}${links.text}${furtherReading.text}`
     await sendEmail({ to: email, subject: result.experimental_output.subject, html, text })
     await query(
       `INSERT INTO digests (user_id, config_id, status, subject, html, text_content, referenced_post_ids, sent_at)

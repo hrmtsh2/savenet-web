@@ -3,11 +3,12 @@
 import mixpanel from "mixpanel-browser"
 
 const token = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN
+const apiHost = "https://api-eu.mixpanel.com"
 let initialized = false
 
 function ensureInitialized() {
   if (!token || initialized) return Boolean(token)
-  mixpanel.init(token, { persistence: "localStorage", track_pageview: false })
+  mixpanel.init(token, { api_host: apiHost, persistence: "localStorage", track_pageview: false })
   initialized = true
   return true
 }
